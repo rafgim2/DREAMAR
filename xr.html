@@ -33,9 +33,9 @@
 
 <div id="overlay">
   <div class="card">
-    <h2 style="margin:0 0 10px 0;">Modo passthrough (AR)</h2>
+    <h2 style="margin:0 0 10px 0;">AR · Texto centrado</h2>
     <p style="margin:0 0 14px 0;opacity:.9;">
-      Texto con efecto escritura SIN desplazarse.
+      Escritura a mano, centrada y fija en el espacio.
     </p>
     <div>
       <button id="start">1) Iniciar vídeo</button>
@@ -54,268 +54,191 @@
   const logEl = document.getElementById("log");
   const log = (m) => logEl.textContent += (logEl.textContent ? "\n" : "") + m;
 
-  /* ---------------------------
-     FUENTE PRISTINA (Canvas)
-  --------------------------- */
+  /* ---------- Fuente PRISTINA ---------- */
   let PRISTINA_READY = false;
-  async function loadPristinaFont() {
-    try {
-      const font = new FontFace("PristinaAR", "url(./PRISTINA.TTF)");
-      await font.load();
-      document.fonts.add(font);
-      PRISTINA_READY = true;
-      log("✅ Fuente PRISTINA cargada");
-    } catch {
-      log("❌ No se pudo cargar PRISTINA.TTF (uso fallback)");
-    }
+  async function loadFont() {
+    const f = new FontFace("PristinaAR","url(./PRISTINA.TTF)");
+    await f.load();
+    document.fonts.add(f);
+    PRISTINA_READY = true;
+    log("✓ Fuente PRISTINA cargada");
   }
-  await loadPristinaFont();
+  await loadFont();
 
-  /* ---------------------------
-     THREE + WEBXR
-  --------------------------- */
-  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  /* ---------- THREE / XR ---------- */
+  const renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setSize(window.innerWidth,window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   scene.background = null;
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 50);
-  camera.position.set(0, 1.6, 2);
+  const camera = new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,50);
+  camera.position.set(0,1.6,2);
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
+  scene.add(new THREE.HemisphereLight(0xffffff,0x222222,1.2));
 
-  /* ---------------------------
-     VIDEO (loop)
-  --------------------------- */
+  /* ---------- VIDEO ---------- */
   const video = document.createElement("video");
   video.src = VIDEO_URL;
-  video.crossOrigin = "anonymous";
   video.muted = true;
-  video.setAttribute("muted", "");
-  video.volume = 0;
   video.loop = true;
   video.playsInline = true;
-  video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
-  video.preload = "auto";
-
-  video.style.position = "fixed";
-  video.style.left = "-9999px";
-  video.style.top = "-9999px";
-  video.width = 1; video.height = 1;
+  video.setAttribute("playsinline","");
+  video.setAttribute("webkit-playsinline","");
+  video.style.position="fixed";
+  video.style.left="-9999px";
   document.body.appendChild(video);
 
   const videoTex = new THREE.VideoTexture(video);
-  videoTex.colorSpace = THREE.SRGBColorSpace;
-
   const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 0.9),
-    new THREE.MeshBasicMaterial({ map: videoTex, transparent:true })
+    new THREE.PlaneGeometry(1.6,0.9),
+    new THREE.MeshBasicMaterial({map:videoTex,transparent:true})
   );
-  screen.position.set(0, 1.55, -1.35);
+  screen.position.set(0,1.55,-1.2); // MÁS CERCA
   scene.add(screen);
 
-  /* ---------------------------
-     TEXTO 3D: CANVAS FIJO (NO SE MUEVE)
-  --------------------------- */
-  const fontName = () => (PRISTINA_READY ? "PristinaAR" : "serif");
+  /* ---------- TEXTO (CANVAS FIJO) ---------- */
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = 1600;
+  canvas.height = 420;
 
-  // Canvas fijo: tamaño constante siempre
-  const textCanvas = document.createElement("canvas");
-  const textCtx = textCanvas.getContext("2d");
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
 
-  // Ajusta aquí “cuán grande” es el bloque de texto
-  textCanvas.width  = 1600;
-  textCanvas.height = 420;
+  const mat = new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false});
+  const aspect = canvas.width/canvas.height;
+  const planeH = 0.28;
+  const planeW = planeH*aspect;
 
-  const textTex = new THREE.CanvasTexture(textCanvas);
-  textTex.minFilter = THREE.LinearFilter;
-  textTex.magFilter = THREE.LinearFilter;
-  textTex.generateMipmaps = false;
-
-  // Plano fijo (NO se recrea nunca)
-  const textMat = new THREE.MeshBasicMaterial({ map: textTex, transparent:true, depthWrite:false });
-  const aspect = textCanvas.width / textCanvas.height;
-  const planeH = 0.30;
-  const planeW = planeH * aspect;
-
-  const textPlane = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), textMat);
-  textPlane.position.set(0, 1.23, -1.05); // fijo en el mundo
+  const textPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(planeW,planeH),
+    mat
+  );
+  textPlane.position.set(0,1.22,-0.9); // MÁS CERCA
   scene.add(textPlane);
 
-  // Ajustes de dibujo
   const PAD = 40;
-  const FONT_PX = 60;
-  const LINE_H = 88;
+  const FONT = 58;
+  const LINE = 82;
 
-  function clearTextCanvas() {
-    textCtx.clearRect(0,0,textCanvas.width,textCanvas.height);
-  }
-
-  function drawText(textVisible) {
-    clearTextCanvas();
-
-    // Fondo transparente; sombra para legibilidad
-    textCtx.font = `${FONT_PX}px ${fontName()}`;
-    textCtx.textBaseline = "top";
-
-    textCtx.fillStyle = "rgba(255,255,255,0.96)";
-    textCtx.shadowColor = "rgba(0,0,0,0.85)";
-    textCtx.shadowBlur = 22;
-    textCtx.shadowOffsetY = 2;
-
-    // ⚓ ANCLA: izquierda (no se recentra nunca)
-    const x = PAD;
-    let y = PAD;
-
-    const lines = textVisible.split("\n");
-    for (const line of lines) {
-      textCtx.fillText(line, x, y);
-      y += LINE_H;
-    }
-
-    textTex.needsUpdate = true;
-  }
-
-  /* ---------------------------
-     EFECTO ESCRITURA (SIN RE-CENTRAR)
-  --------------------------- */
-  const TYPE_MIN_CPS = 18;
-  const TYPE_MAX_CPS = 34;
-  const TYPE_JITTER  = 0.35;
-
-  let typeAll = "";
+  let fullText = "";
   let cursor = 0;
-  let timeToNext = 0;
+  let timeNext = 0;
+  let anchorX = canvas.width/2;
+  let anchorY = PAD + LINE/2;
 
-  function randomCps() {
-    const base = TYPE_MIN_CPS + Math.random() * (TYPE_MAX_CPS - TYPE_MIN_CPS);
-    const jitter = 1 + (Math.random() * 2 - 1) * TYPE_JITTER;
-    return Math.max(8, base * jitter);
+  function clear() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
   }
 
-  function startHandwriting(lines) {
-    typeAll = (Array.isArray(lines) ? lines : [String(lines)]).join("\n");
+  function draw(text) {
+    clear();
+    ctx.font = `${FONT}px ${PRISTINA_READY?"PristinaAR":"serif"}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255,255,255,0.96)";
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 20;
+
+    const lines = text.split("\n");
+    let y = anchorY;
+    for(const l of lines){
+      ctx.fillText(l,anchorX,y);
+      y += LINE;
+    }
+    tex.needsUpdate = true;
+  }
+
+  function startWriting(lines){
+    fullText = (Array.isArray(lines)?lines:[String(lines)]).join("\n");
     cursor = 0;
-    timeToNext = 0;
-    drawText(""); // empieza vacío
+    timeNext = 0;
+
+    // ⚓ CALCULAMOS EL ANCLA UNA SOLA VEZ
+    ctx.font = `${FONT}px ${PRISTINA_READY?"PristinaAR":"serif"}`;
+    const maxW = Math.max(...fullText.split("\n").map(l=>ctx.measureText(l).width));
+    anchorX = canvas.width/2;
+    anchorY = PAD + LINE/2;
+
+    draw("");
   }
 
-  function stepHandwriting(dt) {
-    if (!typeAll || cursor >= typeAll.length) return;
-
-    timeToNext -= dt;
-    while (timeToNext <= 0 && cursor < typeAll.length) {
+  function stepWriting(dt){
+    if(cursor>=fullText.length) return;
+    timeNext -= dt;
+    while(timeNext<=0 && cursor<fullText.length){
       cursor++;
-      drawText(typeAll.slice(0, cursor));
-      timeToNext += 1 / randomCps();
+      draw(fullText.slice(0,cursor));
+      timeNext += 1/(18+Math.random()*14);
     }
   }
 
-  /* ---------------------------
-     CUES + LOOP RESET
-  --------------------------- */
+  /* ---------- CUES ---------- */
   const cues = [...CUES].sort((a,b)=>a.t-b.t);
   let nextCue = 0;
   let lastT = 0;
   let prevT = 0;
 
-  function resetAll() {
+  function resetAll(){
     nextCue = 0;
-    startHandwriting([""]);
+    startWriting([""]);
   }
 
-  function resyncCues(t){
-    let idx=-1;
-    for(let i=0;i<cues.length;i++){ if(cues[i].t<=t) idx=i; else break; }
-    nextCue = idx+1;
-    if (idx >= 0) startHandwriting(cues[idx].text);
-  }
-
-  /* ---------------------------
-     Render loop
-  --------------------------- */
-  renderer.setAnimationLoop(() => {
-    if (video.readyState >= 2) videoTex.needsUpdate = true;
-
+  /* ---------- LOOP ---------- */
+  renderer.setAnimationLoop(()=>{
+    if(video.readyState>=2) videoTex.needsUpdate=true;
     const t = video.currentTime;
 
-    // Detecta loop (salto hacia atrás)
-    if (t + 0.02 < lastT) {
-      resetAll();
-      prevT = t;
-    }
+    if(t+0.02<lastT){ resetAll(); prevT=t; }
     lastT = t;
 
-    // Dispara cues
-    while (nextCue < cues.length && t >= cues[nextCue].t) {
-      startHandwriting(cues[nextCue].text);
+    while(nextCue<cues.length && t>=cues[nextCue].t){
+      startWriting(cues[nextCue].text);
       nextCue++;
     }
 
-    const dt = Math.max(0, t - prevT);
+    const dt = Math.max(0,t-prevT);
     prevT = t;
-    stepHandwriting(dt);
+    stepWriting(dt);
 
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
   });
 
-  /* ---------------------------
-     Botones AR / VR
-  --------------------------- */
+  /* ---------- BOTONES ---------- */
   const btnStart = document.getElementById("start");
   const btnAR = document.getElementById("enterAR");
   const btnVR = document.getElementById("enterVR");
 
   async function enterSession(mode){
-    const session = await navigator.xr.requestSession(mode, {
-      optionalFeatures:["local-floor","bounded-floor","hand-tracking"]
-    });
-    renderer.xr.setSession(session);
+    const s = await navigator.xr.requestSession(mode,{optionalFeatures:["local-floor"]});
+    renderer.xr.setSession(s);
   }
 
-  btnStart.onclick = async () => {
-    try {
-      log("▶️ Iniciando vídeo (loop)...");
-      video.load();
-      await video.play();
-      resyncCues(video.currentTime);
-      btnAR.disabled = false;
-      btnVR.disabled = false;
-      log("✅ Vídeo OK. Ahora entra en AR/VR.");
-    } catch (e) {
-      log(`❌ Error vídeo: ${e?.name || "Error"}: ${e?.message || e}`);
-    }
+  btnStart.onclick = async ()=>{
+    await video.play();
+    btnAR.disabled=false;
+    btnVR.disabled=false;
+    log("▶ Vídeo iniciado");
   };
 
-  btnAR.onclick = async () => {
-    try {
-      const ok = await navigator.xr.isSessionSupported("immersive-ar");
-      if (!ok) throw new Error("immersive-ar no soportado");
-      await enterSession("immersive-ar");
-      overlay.style.display="none";
-    } catch (e) {
-      log(`❌ AR: ${e?.message || e}`);
-    }
+  btnAR.onclick = async ()=>{
+    await enterSession("immersive-ar");
+    overlay.style.display="none";
   };
 
-  btnVR.onclick = async () => {
-    try {
-      await enterSession("immersive-vr");
-      overlay.style.display="none";
-    } catch (e) {
-      log(`❌ VR: ${e?.message || e}`);
-    }
+  btnVR.onclick = async ()=>{
+    await enterSession("immersive-vr");
+    overlay.style.display="none";
   };
 
-  window.addEventListener("resize", ()=>{
-    camera.aspect = window.innerWidth/window.innerHeight;
+  window.addEventListener("resize",()=>{
+    camera.aspect=window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(window.innerWidth,window.innerHeight);
   });
 </script>
 </body>
