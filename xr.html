@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>XR Video</title>
+  <title>XR Video + Texto 3D</title>
   <style>
     html,body{margin:0;height:100%;background:#000;overflow:hidden}
     #overlay{
@@ -23,12 +23,10 @@
       padding:20px;
     }
     button{
-      padding:14px 18px;
-      border-radius:14px;
+      padding:14px 18px;border-radius:14px;
       border:1px solid rgba(255,255,255,.2);
       background:rgba(255,255,255,.1);
-      color:#fff;
-      cursor:pointer;
+      color:#fff;cursor:pointer;
     }
     .small{opacity:.75;font-size:14px;line-height:1.4;margin-top:10px}
   </style>
@@ -39,66 +37,22 @@
   <div class="card">
     <h2 style="margin:0 0 10px 0;">XR listo</h2>
     <p style="margin:0 0 14px 0;opacity:.9;">
-      Pulsa para iniciar el vídeo (muted) y después entra en VR.
+      Pulsa para iniciar el vídeo y entrar en VR.
     </p>
-    <button id="start">Iniciar vídeo y mostrar botón “Enter VR”</button>
-    <div class="small">
-      En Quest es obligatorio arrancar el vídeo en muted antes de usarlo como textura.
-    </div>
+    <button id="start">Iniciar vídeo y mostrar “Enter VR”</button>
+    <div class="small">Texto extruido 3D + pantalla más cerca.</div>
   </div>
 </div>
 
 <script type="module">
   import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
   import { VRButton } from "https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js";
+  import { FontLoader } from "https://unpkg.com/three@0.160.0/examples/jsm/loaders/FontLoader.js";
+  import { TextGeometry } from "https://unpkg.com/three@0.160.0/examples/jsm/geometries/TextGeometry.js";
   import { CUES, VIDEO_URL } from "./cues.js";
 
-  // ---------- Util: textura de texto (canvas) ----------
-  function makeTextTexture(lines) {
-    const safeLines = Array.isArray(lines) ? lines : [String(lines)];
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-
-    const pad = 34;
-    const fontPx = 52;
-    const lineH = 72;
-    const maxW = 1400;
-
-    ctx.font = `${fontPx}px system-ui, Arial`;
-
-    const widths = safeLines.map(l => ctx.measureText(l).width);
-    const w = Math.min(maxW, Math.max(...widths) + pad * 2);
-    const h = safeLines.length * lineH + pad * 2;
-
-    canvas.width = Math.ceil(w);
-    canvas.height = Math.ceil(h);
-
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.font = `${fontPx}px system-ui, Arial`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
-    ctx.shadowColor = "rgba(0,0,0,0.80)";
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 2;
-
-    const cx = canvas.width / 2;
-    let y = pad + lineH / 2;
-    for (const line of safeLines) {
-      ctx.fillText(line, cx, y);
-      y += lineH;
-    }
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
-    return tex;
-  }
-
-  // ---------- Three.js setup ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  // ---------- Three.js ----------
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
@@ -107,34 +61,44 @@
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
-  camera.position.set(0, 1.6, 2.2);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 50);
+  camera.position.set(0,1.6,2);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(1,2,1);
+  scene.add(dir);
 
-  // Suelo sutil (referencia visual)
+  // suelo sutil
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(20, 20),
-    new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1, metalness: 0 })
+    new THREE.PlaneGeometry(20,20),
+    new THREE.MeshStandardMaterial({ color:0x050505, roughness:1 })
   );
-  floor.rotation.x = -Math.PI / 2;
+  floor.rotation.x = -Math.PI/2;
   floor.position.y = 0;
   scene.add(floor);
 
-  // ---------- VIDEO (ajustes QUEST) ----------
+  // ---------- Vídeo (Quest-safe) ----------
   const video = document.createElement("video");
   video.src = VIDEO_URL;
   video.crossOrigin = "anonymous";
-
-  // 🔴 CLAVES para Quest + WebXR VideoTexture:
-  video.muted = true;                 // obligatorio para arrancar
+  video.muted = true;
+  video.setAttribute("muted","");
+  video.volume = 0;
   video.playsInline = true;
-  video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
+  video.setAttribute("playsinline","");
+  video.setAttribute("webkit-playsinline","");
   video.preload = "auto";
   video.loop = false;
 
-  // pantalla flotante
+  // meterlo en el DOM (ayuda a Quest)
+  video.style.position = "fixed";
+  video.style.left = "-9999px";
+  video.style.top = "-9999px";
+  video.width = 1;
+  video.height = 1;
+  document.body.appendChild(video);
+
   const videoTex = new THREE.VideoTexture(video);
   videoTex.colorSpace = THREE.SRGBColorSpace;
 
@@ -142,64 +106,122 @@
     new THREE.PlaneGeometry(1.6, 0.9),
     new THREE.MeshBasicMaterial({ map: videoTex })
   );
-  screen.position.set(0, 1.6, -2.2);
+  // ✅ más cerca
+  screen.position.set(0, 1.6, -1.4);
   scene.add(screen);
 
-  // Panel oscuro detrás para “modo cine”
+  // panel oscuro detrás (modo cine)
   const dimmer = new THREE.Mesh(
     new THREE.PlaneGeometry(6, 4),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 })
+    new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.55 })
   );
-  dimmer.position.set(0, 1.6, -2.6);
+  dimmer.position.set(0, 1.6, -1.75);
   scene.add(dimmer);
 
-  // ---------- TEXTO 3D ----------
-  let textPlane = null;
-  function setText3D(lines) {
-    const tex = makeTextTexture(lines);
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      opacity: 1,
-      depthWrite: false
-    });
+  // ---------- Texto 3D extruido ----------
+  let font = null;
+  const fontLoader = new FontLoader();
 
-    const aspect = tex.image.width / tex.image.height;
-    const h = 0.28;
-    const w = h * aspect;
+  // Fuente JSON de Three (helvetiker). Es un JSON, no una “web font”.
+  // (CDN de threejs.org)
+  const FONT_URL = "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json";
 
-    if (textPlane) {
-      textPlane.material.map.dispose();
-      textPlane.material.dispose();
-      textPlane.geometry.dispose();
-      scene.remove(textPlane);
+  const textGroup = new THREE.Group();
+  scene.add(textGroup);
+
+  // Material del texto (blanco suave)
+  const textMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.35,
+    metalness: 0.0
+  });
+
+  function clearText3D(){
+    while (textGroup.children.length) {
+      const m = textGroup.children.pop();
+      m.geometry?.dispose?.();
+      // no hacemos dispose de material global
     }
-
-    textPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
-    textPlane.position.set(0, 1.25, -1.6);
-    scene.add(textPlane);
   }
 
-  // ---------- CUES ----------
-  const cues = [...CUES].sort((a,b) => a.t - b.t);
+  function setText3D(lines){
+    if (!font) return;
+    clearText3D();
+
+    const safeLines = Array.isArray(lines) ? lines : [String(lines)];
+
+    // Parámetros del texto: ajusta si lo quieres más grande
+    const size = 0.07;      // tamaño en metros
+    const height = 0.015;   // extrusión (grosor)
+    const curveSegments = 8;
+    const bevelEnabled = true;
+    const bevelThickness = 0.004;
+    const bevelSize = 0.0025;
+    const bevelSegments = 3;
+
+    // Construimos cada línea como mesh independiente
+    const lineMeshes = [];
+    for (const line of safeLines) {
+      const geo = new TextGeometry(line, {
+        font,
+        size,
+        height,
+        curveSegments,
+        bevelEnabled,
+        bevelThickness,
+        bevelSize,
+        bevelSegments,
+      });
+      geo.computeBoundingBox();
+      geo.center(); // centra cada línea en X/Y local
+
+      const mesh = new THREE.Mesh(geo, textMat);
+      lineMeshes.push(mesh);
+      textGroup.add(mesh);
+    }
+
+    // Apilado vertical (líneas una debajo de otra)
+    const lineSpacing = 0.10; // separación entre líneas (metros)
+    const totalH = (safeLines.length - 1) * lineSpacing;
+    lineMeshes.forEach((m, i) => {
+      m.position.y = (totalH / 2) - i * lineSpacing;
+    });
+
+    // ✅ más cerca y un pelín por debajo de la pantalla
+    textGroup.position.set(0, 1.25, -1.05);
+  }
+
+  // el texto mira al usuario
+  function faceCamera(){
+    textGroup.quaternion.copy(camera.quaternion);
+  }
+
+  // Carga de fuente (una vez)
+  fontLoader.load(
+    FONT_URL,
+    (loaded) => { font = loaded; },
+    undefined,
+    (err) => { console.error("No se pudo cargar la fuente:", err); }
+  );
+
+  // ---------- Cues ----------
+  const cues = [...CUES].sort((a,b)=>a.t-b.t);
   let nextCue = 0;
 
-  function resyncCues(t) {
+  function resyncCues(t){
     let idx = -1;
-    for (let i = 0; i < cues.length; i++) {
-      if (cues[i].t <= t) idx = i;
-      else break;
+    for (let i=0;i<cues.length;i++){
+      if (cues[i].t <= t) idx = i; else break;
     }
     nextCue = idx + 1;
     if (idx >= 0) setText3D(cues[idx].text);
   }
 
   // ---------- Loop ----------
-  renderer.setAnimationLoop(() => {
-    // fuerza actualización de textura (a veces ayuda en Quest)
+  renderer.setAnimationLoop(()=>{
     if (video.readyState >= 2) videoTex.needsUpdate = true;
 
-    if (!video.paused && !video.ended) {
+    if (!video.paused && !video.ended && font) {
       const t = video.currentTime;
       while (nextCue < cues.length && t >= cues[nextCue].t) {
         setText3D(cues[nextCue].text);
@@ -207,32 +229,31 @@
       }
     }
 
-    if (textPlane) textPlane.quaternion.copy(camera.quaternion);
+    faceCamera();
     renderer.render(scene, camera);
   });
 
-  // ---------- Resize ----------
-  window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+  window.addEventListener("resize", ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // ---------- Start flow ----------
+  // ---------- Start ----------
   const overlay = document.getElementById("overlay");
-  document.getElementById("start").addEventListener("click", async () => {
-    try {
-      // 🔴 Importantísimo: arrancar el vídeo (muted) ANTES de entrar en XR
-      await video.play();
+  document.getElementById("start").addEventListener("click", async ()=>{
+    try{
+      video.load();
+      const p = video.play();
+      if (p && p.then) await p;
+
       resyncCues(video.currentTime);
 
-      // Ahora ya mostramos el botón de VR
       document.body.appendChild(VRButton.createButton(renderer));
-
       overlay.style.display = "none";
-    } catch (e) {
-      console.error("Error reproduciendo vídeo en Quest:", e);
-      alert("No se pudo iniciar el vídeo. Prueba a recargar y pulsar de nuevo.");
+    }catch(e){
+      console.error(e);
+      alert(`${e?.name||"Error"}: ${e?.message||e}`);
     }
   });
 </script>
