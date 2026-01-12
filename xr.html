@@ -1,378 +1,251 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>XR Video (AR/MR)</title>
-  <style>
-    html,body{margin:0;height:100%;background:#000;overflow:hidden}
-    #overlay{
-      position:fixed;inset:0;display:grid;place-items:center;
-      background:rgba(0,0,0,.85);color:#fff;font-family:system-ui,Arial;
-      z-index:10;text-align:center;padding:24px;
-    }
-    .card{
-      max-width:820px;width:100%;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:18px;padding:20px;
-    }
-    button{
-      padding:14px 18px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.2);
-      background:rgba(255,255,255,.1);
-      color:#fff;cursor:pointer;margin:6px;
-    }
-    .small{
-      opacity:.75;font-size:14px;line-height:1.4;margin-top:10px;
-      white-space:pre-wrap;text-align:left
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XR Video AR</title>
+
+<style>
+html,body{
+  margin:0;height:100%;overflow:hidden;background:#000;
+  font-family:system-ui,Arial;
+}
+#overlay{
+  position:fixed;inset:0;
+  display:grid;place-items:center;
+  background:rgba(0,0,0,.85);
+  color:white;z-index:10;
+}
+.card{
+  background:rgba(255,255,255,.08);
+  padding:20px;border-radius:18px;
+  max-width:820px;width:100%;
+  text-align:center;
+}
+button{
+  padding:14px 18px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.12);
+  color:white;
+  cursor:pointer;
+  margin:6px;
+}
+.small{
+  opacity:.7;font-size:14px;
+  margin-top:10px;
+  text-align:left;
+  white-space:pre-wrap;
+}
+</style>
 </head>
+
 <body>
 
 <div id="overlay">
   <div class="card">
-    <h2 style="margin:0 0 10px 0;">AR + vídeo + escritura estable</h2>
-    <p style="margin:0 0 14px 0;opacity:.9;">
-      Las letras aparecen “escribiéndose” sin recolocar (reveal por clip).
-    </p>
-    <div>
-      <button id="start">1) Iniciar vídeo</button>
-      <button id="enterAR" disabled>2) Entrar en AR</button>
-      <button id="enterVR" disabled>Entrar en VR</button>
-    </div>
+    <h2>Experiencia AR</h2>
+    <p>Inicia el vídeo (con sonido) y entra en AR</p>
+    <button id="start">▶ Iniciar vídeo</button>
+    <button id="enterAR" disabled>Entrar en AR</button>
+    <button id="enterVR" disabled>Entrar en VR</button>
     <div class="small" id="log"></div>
   </div>
 </div>
 
 <script type="module">
-  import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-  import { CUES, VIDEO_URL } from "./cues.js";
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { VIDEO_URL, CUES } from "./cues.js";
 
-  const overlay = document.getElementById("overlay");
-  const logEl = document.getElementById("log");
-  const log = (m) => logEl.textContent += (logEl.textContent ? "\n" : "") + m;
+const logEl = document.getElementById("log");
+const log = m => logEl.textContent += (logEl.textContent ? "\n":"") + m;
+const overlay = document.getElementById("overlay");
 
-  // ---------- Fuente PRISTINA ----------
-  let PRISTINA_READY = false;
-  async function loadPristinaFont() {
-    try {
-      const font = new FontFace("PristinaAR", "url(./PRISTINA.TTF)");
-      await font.load();
-      document.fonts.add(font);
-      PRISTINA_READY = true;
-      log("✅ Fuente PRISTINA cargada");
-    } catch (e) {
-      log("❌ No se pudo cargar PRISTINA.TTF (uso fallback)");
-    }
+/* -------------------- FUENTE PRISTINA -------------------- */
+let FONT_READY=false;
+async function loadFont(){
+  try{
+    const f=new FontFace("PristinaAR","url(./PRISTINA.TTF)");
+    await f.load(); document.fonts.add(f);
+    FONT_READY=true;
+  }catch{}
+}
+await loadFont();
+const fontName=()=>FONT_READY?"PristinaAR":"serif";
+
+/* -------------------- THREE / XR -------------------- */
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.xr.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=null;
+
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,50);
+camera.position.set(0,1.6,2);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x222222,1.2));
+
+/* -------------------- VIDEO + AUDIO -------------------- */
+const video=document.createElement("video");
+video.src=VIDEO_URL;
+video.crossOrigin="anonymous";
+video.loop=true;
+video.preload="auto";
+video.playsInline=true;
+video.setAttribute("playsinline","");
+video.setAttribute("webkit-playsinline","");
+
+video.muted=false;        // 🔊 AUDIO ON
+video.volume=1.0;
+
+video.style.position="fixed";
+video.style.left="-9999px";
+document.body.appendChild(video);
+
+const videoTex=new THREE.VideoTexture(video);
+videoTex.colorSpace=THREE.SRGBColorSpace;
+
+const screen=new THREE.Mesh(
+  new THREE.PlaneGeometry(1.6,0.9),
+  new THREE.MeshBasicMaterial({map:videoTex})
+);
+screen.position.set(0,1.55,-1.35);
+scene.add(screen);
+
+/* -------------------- TEXTO (ESCRITURA ESTABLE) -------------------- */
+const pad=36, fontPx=56, lineH=78;
+let canvas,ctx,texture,plane;
+let fullLines=[],fullWidths=[],fullText="";
+let cursor=0,nextT=0,lastT=0;
+
+function setupText(lines){
+  fullLines=Array.isArray(lines)?lines:[lines];
+  const m=document.createElement("canvas").getContext("2d");
+  m.font=`${fontPx}px ${fontName()}`;
+  fullWidths=fullLines.map(l=>m.measureText(l).width);
+  const w=Math.max(...fullWidths)+pad*2;
+  const h=fullLines.length*lineH+pad*2;
+
+  canvas=document.createElement("canvas");
+  canvas.width=w; canvas.height=h;
+  ctx=canvas.getContext("2d");
+
+  texture=new THREE.CanvasTexture(canvas);
+  texture.minFilter=THREE.LinearFilter;
+  texture.magFilter=THREE.LinearFilter;
+
+  if(plane){
+    plane.material.dispose();
+    plane.geometry.dispose();
+    scene.remove(plane);
   }
-  await loadPristinaFont();
-  const fontName = () => (PRISTINA_READY ? "PristinaAR" : "serif");
 
-  // ---------- Three.js ----------
-  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
-  document.body.appendChild(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  scene.background = null;
-
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 50);
-  camera.position.set(0, 1.6, 2);
-
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
-
-  // ---------- Vídeo (loop) ----------
-  const video = document.createElement("video");
-  video.src = VIDEO_URL;
-  video.crossOrigin = "anonymous";
-  video.muted = true;
-  video.setAttribute("muted", "");
-  video.volume = 0;
-  video.loop = true;
-  video.playsInline = true;
-  video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
-  video.preload = "auto";
-
-  video.style.position = "fixed";
-  video.style.left = "-9999px";
-  video.style.top = "-9999px";
-  video.width = 1; video.height = 1;
-  document.body.appendChild(video);
-
-  const videoTex = new THREE.VideoTexture(video);
-  videoTex.colorSpace = THREE.SRGBColorSpace;
-
-  const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 0.9),
-    new THREE.MeshBasicMaterial({ map: videoTex, transparent:true })
+  const aspect=w/h;
+  plane=new THREE.Mesh(
+    new THREE.PlaneGeometry(0.3*aspect,0.3),
+    new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false})
   );
-  screen.position.set(0, 1.55, -1.35);
-  scene.add(screen);
+  plane.position.set(0,1.23,-1.05);
+  scene.add(plane);
 
-  // ---------- Texto 3D fijo (canvas + clip reveal) ----------
-  const pad = 36;
-  const fontPx = 56;
-  const lineH = 78;
-  const maxW = 1400;
+  fullText=fullLines.join("\n");
+  cursor=0; nextT=0;
+  draw(0);
+}
 
-  // Velocidad (caracteres/seg)
-  const TYPE_MIN_CPS = 8;
-  const TYPE_MAX_CPS = 14;
-  const TYPE_JITTER = 0.25;
+function draw(chars){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.font=`${fontPx}px ${fontName()}`;
+  ctx.fillStyle="rgba(255,255,255,.96)";
+  ctx.shadowColor="rgba(0,0,0,.85)";
+  ctx.shadowBlur=20;
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
 
-  let textPlane = null;
-  let textCanvas = null;
-  let textCtx = null;
-  let textTexture = null;
+  const visible=fullText.slice(0,chars).split("\n");
+  let y=pad+lineH/2, cx=canvas.width/2;
 
-  // Texto final del cue
-  let fullLines = [];
-  let fullLineWidths = []; // ancho de cada línea completa (px)
-  let fullTextAll = "";    // con \n
+  for(let i=0;i<fullLines.length;i++){
+    const full=fullLines[i];
+    const vis=visible[i]||"";
+    const left=cx-fullWidths[i]/2;
+    const vw=ctx.measureText(vis).width;
 
-  // Estado typewriter por caracteres
-  let typeCursor = 0;
-  let typeNext = 0;
-  let lastT = 0;
-
-  function randomCps() {
-    const base = TYPE_MIN_CPS + Math.random() * (TYPE_MAX_CPS - TYPE_MIN_CPS);
-    const jitter = 1 + (Math.random() * 2 - 1) * TYPE_JITTER;
-    return Math.max(8, base * jitter);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left,y-lineH/2,vw,lineH);
+    ctx.clip();
+    ctx.fillText(full,cx,y);
+    ctx.restore();
+    y+=lineH;
   }
+  texture.needsUpdate=true;
+}
 
-  function measureCanvasForLines(lines) {
-    const c = document.createElement("canvas");
-    const ctx = c.getContext("2d");
-    ctx.font = `${fontPx}px ${fontName()}`;
-
-    const safe = Array.isArray(lines) ? lines : [String(lines)];
-    const widths = safe.map(l => ctx.measureText(l).width);
-
-    const w = Math.min(maxW, Math.max(...widths) + pad*2);
-    const h = safe.length * lineH + pad*2;
-
-    return { w: Math.ceil(w), h: Math.ceil(h), safe, widths };
+function step(dt){
+  if(cursor>=fullText.length) return;
+  nextT-=dt;
+  while(nextT<=0 && cursor<fullText.length){
+    cursor++;
+    draw(cursor);
+    nextT+=1/(8+Math.random()*6); // velocidad
   }
+}
 
-  function setupTextForCue(lines) {
-    const { w, h, safe, widths } = measureCanvasForLines(lines);
+/* -------------------- CUES -------------------- */
+const cues=[...CUES].sort((a,b)=>a.t-b.t);
+let nextCue=0;
 
-    fullLines = safe;
-    fullLineWidths = widths;
-    fullTextAll = safe.join("\n");
+/* -------------------- LOOP -------------------- */
+renderer.setAnimationLoop(()=>{
+  if(video.readyState>=2) videoTex.needsUpdate=true;
 
-    typeCursor = 0;
-    typeNext = 0;
-
-    // canvas fijo
-    textCanvas = document.createElement("canvas");
-    textCanvas.width = w;
-    textCanvas.height = h;
-    textCtx = textCanvas.getContext("2d");
-
-    textTexture = new THREE.CanvasTexture(textCanvas);
-    textTexture.minFilter = THREE.LinearFilter;
-    textTexture.magFilter = THREE.LinearFilter;
-    textTexture.generateMipmaps = false;
-
-    // plano fijo
-    const aspect = w / h;
-    const physicalH = 0.30;
-    const physicalW = physicalH * aspect;
-
-    const mat = new THREE.MeshBasicMaterial({
-      map: textTexture,
-      transparent: true,
-      depthWrite: false
-    });
-
-    if (textPlane) {
-      textPlane.material.dispose();
-      textPlane.geometry.dispose();
-      scene.remove(textPlane);
-    }
-
-    textPlane = new THREE.Mesh(new THREE.PlaneGeometry(physicalW, physicalH), mat);
-    textPlane.position.set(0, 1.23, -1.05);
-    scene.add(textPlane);
-
-    // arranca vacío
-    drawRevealByCharCount(0);
+  const t=video.currentTime;
+  while(nextCue<cues.length && t>=cues[nextCue].t){
+    setupText(cues[nextCue].text);
+    nextCue++;
   }
+  const dt=Math.max(0,t-lastT);
+  lastT=t;
+  step(dt);
 
-  // Convierte "n caracteres del texto total" a "qué se revela en cada línea"
-  function computeVisiblePerLine(charCount) {
-    const joined = fullTextAll;
-    const visible = joined.slice(0, Math.max(0, Math.min(charCount, joined.length)));
-    const parts = visible.split("\n");
-    // parts[i] es lo visible en la línea i
-    return parts;
-  }
+  renderer.render(scene,camera);
+});
 
-  // Dibuja SIEMPRE el texto FINAL en posición fija, pero recortado por clip según lo visible
-  function drawRevealByCharCount(charCount) {
-    if (!textCtx || !textCanvas || !textTexture) return;
+/* -------------------- BOTONES -------------------- */
+const btnStart=document.getElementById("start");
+const btnAR=document.getElementById("enterAR");
+const btnVR=document.getElementById("enterVR");
 
-    const visibleLines = computeVisiblePerLine(charCount);
+btnStart.onclick=async()=>{
+  try{
+    video.muted=false;
+    video.volume=1.0;
+    await video.play();   // 👈 gesto de usuario → audio permitido
+    btnAR.disabled=false;
+    btnVR.disabled=false;
+    log("▶ Vídeo con sonido iniciado");
+  }catch(e){log("Error vídeo");}
+};
 
-    // limpiar
-    textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
-
-    // estilo
-    textCtx.font = `${fontPx}px ${fontName()}`;
-    textCtx.textAlign = "center";
-    textCtx.textBaseline = "middle";
-    textCtx.fillStyle = "rgba(255,255,255,0.96)";
-    textCtx.shadowColor = "rgba(0,0,0,0.85)";
-    textCtx.shadowBlur = 20;
-    textCtx.shadowOffsetY = 2;
-
-    const cx = textCanvas.width / 2;
-    let y = pad + lineH/2;
-
-    for (let i = 0; i < fullLines.length; i++) {
-      const fullLine = fullLines[i];
-      const fullW = fullLineWidths[i];
-
-      // borde izquierdo fijo de la línea COMPLETA (para que no “baile”)
-      const leftX = cx - fullW / 2;
-
-      // cuánto de esa línea debe estar visible
-      const vis = (visibleLines[i] ?? "");
-      const visW = textCtx.measureText(vis).width;
-
-      // Clip: revela desde leftX hacia la derecha
-      textCtx.save();
-      textCtx.beginPath();
-      textCtx.rect(leftX, y - lineH/2, visW, lineH);
-      textCtx.clip();
-
-      // Dibujamos la línea COMPLETA siempre en el mismo sitio
-      textCtx.fillText(fullLine, cx, y);
-      textCtx.restore();
-
-      y += lineH;
-    }
-
-    textTexture.needsUpdate = true;
-  }
-
-  function stepTypewriter(dt) {
-    if (!fullTextAll || typeCursor >= fullTextAll.length) return;
-
-    typeNext -= dt;
-    while (typeNext <= 0 && typeCursor < fullTextAll.length) {
-      typeCursor++;
-      drawRevealByCharCount(typeCursor);
-
-      const cps = randomCps();
-      typeNext += 1 / cps;
-    }
-  }
-
-  // ---------- Cues ----------
-  const cues = [...CUES].sort((a,b)=>a.t-b.t);
-  let nextCue = 0;
-
-  function resyncCues(t) {
-    let idx = -1;
-    for (let i=0; i<cues.length; i++) { if (cues[i].t <= t) idx = i; else break; }
-    nextCue = idx + 1;
-    if (idx >= 0) setupTextForCue(cues[idx].text);
-  }
-
-  // Reset cuando el vídeo hace loop
-  let prevVideoTime = 0;
-  function handleLoopReset(t) {
-    if (t + 0.02 < prevVideoTime) {
-      nextCue = 0;
-      // limpia texto
-      if (textCtx && textCanvas && textTexture) {
-        textCtx.clearRect(0,0,textCanvas.width,textCanvas.height);
-        textTexture.needsUpdate = true;
-      }
-    }
-    prevVideoTime = t;
-  }
-
-  // ---------- Render loop ----------
-  renderer.setAnimationLoop(() => {
-    if (video.readyState >= 2) videoTex.needsUpdate = true;
-
-    const t = video.currentTime;
-    handleLoopReset(t);
-
-    while (nextCue < cues.length && t >= cues[nextCue].t) {
-      setupTextForCue(cues[nextCue].text);
-      nextCue++;
-    }
-
-    const dt = Math.max(0, t - lastT);
-    lastT = t;
-    stepTypewriter(dt);
-
-    renderer.render(scene, camera);
+async function enter(mode){
+  const s=await navigator.xr.requestSession(mode,{
+    optionalFeatures:["local-floor","bounded-floor","hand-tracking"]
   });
+  renderer.xr.setSession(s);
+  overlay.style.display="none";
+}
 
-  // ---------- Botones AR/VR ----------
-  const btnStart = document.getElementById("start");
-  const btnAR = document.getElementById("enterAR");
-  const btnVR = document.getElementById("enterVR");
+btnAR.onclick=()=>enter("immersive-ar");
+btnVR.onclick=()=>enter("immersive-vr");
 
-  async function enterSession(mode) {
-    const session = await navigator.xr.requestSession(mode, {
-      optionalFeatures:["local-floor","bounded-floor","hand-tracking"]
-    });
-    renderer.xr.setSession(session);
-  }
-
-  btnStart.onclick = async () => {
-    try {
-      log("▶️ Iniciando vídeo (loop)...");
-      video.load();
-      await video.play();
-      lastT = video.currentTime;
-      resyncCues(video.currentTime);
-      btnAR.disabled = false;
-      btnVR.disabled = false;
-      log("✅ Vídeo OK. Ahora entra en AR/VR.");
-    } catch (e) {
-      log(`❌ Error vídeo: ${e?.name || "Error"}: ${e?.message || e}`);
-    }
-  };
-
-  btnAR.onclick = async () => {
-    try {
-      const ok = await navigator.xr.isSessionSupported("immersive-ar");
-      if (!ok) throw new Error("immersive-ar no soportado");
-      await enterSession("immersive-ar");
-      overlay.style.display="none";
-    } catch (e) {
-      log(`❌ AR: ${e?.message || e}`);
-    }
-  };
-
-  btnVR.onclick = async () => {
-    try {
-      await enterSession("immersive-vr");
-      overlay.style.display="none";
-    } catch (e) {
-      log(`❌ VR: ${e?.message || e}`);
-    }
-  };
-
-  window.addEventListener("resize", ()=>{
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+window.addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
 </script>
 </body>
 </html>
-
