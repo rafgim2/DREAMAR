@@ -33,9 +33,9 @@
 
 <div id="overlay">
   <div class="card">
-    <h2 style="margin:0 0 10px 0;">AR + vídeo + texto “escritura” estable</h2>
+    <h2 style="margin:0 0 10px 0;">AR + vídeo + escritura estable</h2>
     <p style="margin:0 0 14px 0;opacity:.9;">
-      El texto se escribe letra a letra sin recolocarse (tamaño fijo por cue).
+      Las letras aparecen “escribiéndose” sin recolocar (reveal por clip).
     </p>
     <div>
       <button id="start">1) Iniciar vídeo</button>
@@ -114,54 +114,66 @@
   screen.position.set(0, 1.55, -1.35);
   scene.add(screen);
 
-  // ---------- Texto 3D fijo (canvas + textura reutilizable) ----------
-  // Ajustes visuales del texto
+  // ---------- Texto 3D fijo (canvas + clip reveal) ----------
   const pad = 36;
   const fontPx = 56;
   const lineH = 78;
   const maxW = 1400;
 
-  // Estado del “handwriting”
-  const typeSettings = {
-    minCps: 18,
-    maxCps: 34,
-    jitter: 0.35
-  };
+  // Velocidad (caracteres/seg)
+  const TYPE_MIN_CPS = 18;
+  const TYPE_MAX_CPS = 34;
+  const TYPE_JITTER = 0.35;
 
   let textPlane = null;
   let textCanvas = null;
   let textCtx = null;
   let textTexture = null;
 
-  let typeAll = "";       // texto completo (con \n)
-  let typeCursor = 0;     // índice en typeAll
-  let typeNext = 0;       // temporizador para siguiente char (seg)
+  // Texto final del cue
+  let fullLines = [];
+  let fullLineWidths = []; // ancho de cada línea completa (px)
+  let fullTextAll = "";    // con \n
+
+  // Estado typewriter por caracteres
+  let typeCursor = 0;
+  let typeNext = 0;
   let lastT = 0;
 
-  // Medimos el tamaño del canvas usando el TEXTO COMPLETO una sola vez por cue
+  function randomCps() {
+    const base = TYPE_MIN_CPS + Math.random() * (TYPE_MAX_CPS - TYPE_MIN_CPS);
+    const jitter = 1 + (Math.random() * 2 - 1) * TYPE_JITTER;
+    return Math.max(8, base * jitter);
+  }
+
   function measureCanvasForLines(lines) {
     const c = document.createElement("canvas");
     const ctx = c.getContext("2d");
     ctx.font = `${fontPx}px ${fontName()}`;
 
     const safe = Array.isArray(lines) ? lines : [String(lines)];
-    const w = Math.min(
-      maxW,
-      Math.max(...safe.map(l => ctx.measureText(l).width)) + pad*2
-    );
+    const widths = safe.map(l => ctx.measureText(l).width);
+
+    const w = Math.min(maxW, Math.max(...widths) + pad*2);
     const h = safe.length * lineH + pad*2;
 
-    return { w: Math.ceil(w), h: Math.ceil(h), safe };
+    return { w: Math.ceil(w), h: Math.ceil(h), safe, widths };
   }
 
-  function ensureTextResourcesForCue(lines) {
-    const { w, h, safe } = measureCanvasForLines(lines);
+  function setupTextForCue(lines) {
+    const { w, h, safe, widths } = measureCanvasForLines(lines);
 
-    // (Re)crear canvas/textura solo cuando cambie el cue
+    fullLines = safe;
+    fullLineWidths = widths;
+    fullTextAll = safe.join("\n");
+
+    typeCursor = 0;
+    typeNext = 0;
+
+    // canvas fijo
     textCanvas = document.createElement("canvas");
     textCanvas.width = w;
     textCanvas.height = h;
-
     textCtx = textCanvas.getContext("2d");
 
     textTexture = new THREE.CanvasTexture(textCanvas);
@@ -169,7 +181,7 @@
     textTexture.magFilter = THREE.LinearFilter;
     textTexture.generateMipmaps = false;
 
-    // Crear plano con tamaño fijo (según aspect del canvas completo)
+    // plano fijo
     const aspect = w / h;
     const physicalH = 0.30;
     const physicalW = physicalH * aspect;
@@ -187,25 +199,32 @@
     }
 
     textPlane = new THREE.Mesh(new THREE.PlaneGeometry(physicalW, physicalH), mat);
-    textPlane.position.set(0, 1.23, -1.05); // fijo en el mundo
+    textPlane.position.set(0, 1.23, -1.05);
     scene.add(textPlane);
 
-    // Guardamos texto completo para el typewriter
-    typeAll = safe.join("\n");
-    typeCursor = 0;
-    typeNext = 0;
-
-    // Limpiar canvas inicial (vacío)
-    drawPartialText("");
+    // arranca vacío
+    drawRevealByCharCount(0);
   }
 
-  function drawPartialText(partialText) {
-    if (!textCtx) return;
+  // Convierte "n caracteres del texto total" a "qué se revela en cada línea"
+  function computeVisiblePerLine(charCount) {
+    const joined = fullTextAll;
+    const visible = joined.slice(0, Math.max(0, Math.min(charCount, joined.length)));
+    const parts = visible.split("\n");
+    // parts[i] es lo visible en la línea i
+    return parts;
+  }
 
-    // Limpiar
+  // Dibuja SIEMPRE el texto FINAL en posición fija, pero recortado por clip según lo visible
+  function drawRevealByCharCount(charCount) {
+    if (!textCtx || !textCanvas || !textTexture) return;
+
+    const visibleLines = computeVisiblePerLine(charCount);
+
+    // limpiar
     textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
 
-    // Estilo
+    // estilo
     textCtx.font = `${fontPx}px ${fontName()}`;
     textCtx.textAlign = "center";
     textCtx.textBaseline = "middle";
@@ -214,32 +233,43 @@
     textCtx.shadowBlur = 20;
     textCtx.shadowOffsetY = 2;
 
-    // Dibujar líneas (manteniendo las mismas posiciones siempre)
-    const lines = String(partialText).split("\n");
+    const cx = textCanvas.width / 2;
     let y = pad + lineH/2;
-    for (let i = 0; i < lines.length; i++) {
-      textCtx.fillText(lines[i], textCanvas.width/2, y);
+
+    for (let i = 0; i < fullLines.length; i++) {
+      const fullLine = fullLines[i];
+      const fullW = fullLineWidths[i];
+
+      // borde izquierdo fijo de la línea COMPLETA (para que no “baile”)
+      const leftX = cx - fullW / 2;
+
+      // cuánto de esa línea debe estar visible
+      const vis = (visibleLines[i] ?? "");
+      const visW = textCtx.measureText(vis).width;
+
+      // Clip: revela desde leftX hacia la derecha
+      textCtx.save();
+      textCtx.beginPath();
+      textCtx.rect(leftX, y - lineH/2, visW, lineH);
+      textCtx.clip();
+
+      // Dibujamos la línea COMPLETA siempre en el mismo sitio
+      textCtx.fillText(fullLine, cx, y);
+      textCtx.restore();
+
       y += lineH;
     }
 
-    // Actualizar textura sin cambiar tamaño/posición
     textTexture.needsUpdate = true;
   }
 
-  function randomCps() {
-    const base = typeSettings.minCps + Math.random() * (typeSettings.maxCps - typeSettings.minCps);
-    const jitter = 1 + (Math.random() * 2 - 1) * typeSettings.jitter;
-    return Math.max(8, base * jitter);
-  }
-
   function stepTypewriter(dt) {
-    if (!typeAll || typeCursor >= typeAll.length) return;
+    if (!fullTextAll || typeCursor >= fullTextAll.length) return;
 
     typeNext -= dt;
-    while (typeNext <= 0 && typeCursor < typeAll.length) {
+    while (typeNext <= 0 && typeCursor < fullTextAll.length) {
       typeCursor++;
-      const partial = typeAll.slice(0, typeCursor);
-      drawPartialText(partial);
+      drawRevealByCharCount(typeCursor);
 
       const cps = randomCps();
       typeNext += 1 / cps;
@@ -254,16 +284,19 @@
     let idx = -1;
     for (let i=0; i<cues.length; i++) { if (cues[i].t <= t) idx = i; else break; }
     nextCue = idx + 1;
-    if (idx >= 0) ensureTextResourcesForCue(cues[idx].text);
+    if (idx >= 0) setupTextForCue(cues[idx].text);
   }
 
-  // Reinicio cues al hacer loop (si el tiempo salta atrás)
+  // Reset cuando el vídeo hace loop
   let prevVideoTime = 0;
   function handleLoopReset(t) {
-    if (t + 0.02 < prevVideoTime) { // saltó hacia atrás
+    if (t + 0.02 < prevVideoTime) {
       nextCue = 0;
       // limpia texto
-      if (textCtx && textCanvas && textTexture) drawPartialText("");
+      if (textCtx && textCanvas && textTexture) {
+        textCtx.clearRect(0,0,textCanvas.width,textCanvas.height);
+        textTexture.needsUpdate = true;
+      }
     }
     prevVideoTime = t;
   }
@@ -275,15 +308,13 @@
     const t = video.currentTime;
     handleLoopReset(t);
 
-    // Disparar cues
     while (nextCue < cues.length && t >= cues[nextCue].t) {
-      ensureTextResourcesForCue(cues[nextCue].text);
+      setupTextForCue(cues[nextCue].text);
       nextCue++;
     }
 
     const dt = Math.max(0, t - lastT);
     lastT = t;
-
     stepTypewriter(dt);
 
     renderer.render(scene, camera);
