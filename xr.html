@@ -1,109 +1,240 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XR Video</title>
-<style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden}
-#overlay{
-  position:fixed;inset:0;
-  display:grid;place-items:center;
-  background:rgba(0,0,0,.85);
-  color:#fff;font-family:system-ui,Arial;
-  z-index:10;
-}
-button{
-  padding:14px 18px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.2);
-  background:rgba(255,255,255,.1);
-  color:#fff;
-  cursor:pointer;
-}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XR Video</title>
+  <style>
+    html,body{margin:0;height:100%;background:#000;overflow:hidden}
+    #overlay{
+      position:fixed;inset:0;
+      display:grid;place-items:center;
+      background:rgba(0,0,0,.88);
+      color:#fff;font-family:system-ui,Arial;
+      z-index:10;
+      text-align:center;
+      padding:24px;
+    }
+    .card{
+      max-width:760px;width:100%;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:18px;
+      padding:20px;
+    }
+    button{
+      padding:14px 18px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.2);
+      background:rgba(255,255,255,.1);
+      color:#fff;
+      cursor:pointer;
+    }
+    .small{opacity:.75;font-size:14px;line-height:1.4;margin-top:10px}
+  </style>
 </head>
 <body>
 
 <div id="overlay">
-  <button id="start">Cargar vídeo y entrar en VR</button>
+  <div class="card">
+    <h2 style="margin:0 0 10px 0;">XR listo</h2>
+    <p style="margin:0 0 14px 0;opacity:.9;">
+      Pulsa para iniciar el vídeo (muted) y después entra en VR.
+    </p>
+    <button id="start">Iniciar vídeo y mostrar botón “Enter VR”</button>
+    <div class="small">
+      En Quest es obligatorio arrancar el vídeo en muted antes de usarlo como textura.
+    </div>
+  </div>
 </div>
 
 <script type="module">
-import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-import { VRButton } from "https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js";
-import { CUES, VIDEO_URL } from "./cues.js";
+  import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+  import { VRButton } from "https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js";
+  import { CUES, VIDEO_URL } from "./cues.js";
 
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.xr.enabled = true;
-document.body.appendChild(renderer.domElement);
+  // ---------- Util: textura de texto (canvas) ----------
+  function makeTextTexture(lines) {
+    const safeLines = Array.isArray(lines) ? lines : [String(lines)];
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+    const pad = 34;
+    const fontPx = 52;
+    const lineH = 72;
+    const maxW = 1400;
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 50);
-camera.position.set(0,1.6,2);
+    ctx.font = `${fontPx}px system-ui, Arial`;
 
-scene.add(new THREE.HemisphereLight(0xffffff,0x222222,1.2));
+    const widths = safeLines.map(l => ctx.measureText(l).width);
+    const w = Math.min(maxW, Math.max(...widths) + pad * 2);
+    const h = safeLines.length * lineH + pad * 2;
 
-// Vídeo
-const video = document.createElement("video");
-video.src = VIDEO_URL;
-video.crossOrigin = "anonymous";
-video.playsInline = true;
+    canvas.width = Math.ceil(w);
+    canvas.height = Math.ceil(h);
 
-const videoTex = new THREE.VideoTexture(video);
-const screen = new THREE.Mesh(
-  new THREE.PlaneGeometry(1.6,0.9),
-  new THREE.MeshBasicMaterial({ map: videoTex })
-);
-screen.position.set(0,1.6,-2.2);
-scene.add(screen);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.font = `${fontPx}px system-ui, Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
 
-// Texto 3D
-let textPlane;
-function showText(lines){
-  const c = document.createElement("canvas");
-  const ctx = c.getContext("2d");
-  ctx.font="48px Arial";
-  const pad=30, lh=64;
-  c.width=1200; c.height=lines.length*lh+pad*2;
-  ctx.font="48px Arial";
-  ctx.fillStyle="white";
-  ctx.textAlign="center";
-  ctx.textBaseline="middle";
-  ctx.shadowColor="black";
-  ctx.shadowBlur=20;
-  lines.forEach((l,i)=>{
-    ctx.fillText(l, c.width/2, pad+lh/2+i*lh);
-  });
-  const tex=new THREE.CanvasTexture(c);
-  const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true});
-  const h=.28, w=h*(c.width/c.height);
-  if(textPlane) scene.remove(textPlane);
-  textPlane=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);
-  textPlane.position.set(0,1.25,-1.6);
-  scene.add(textPlane);
-}
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.shadowColor = "rgba(0,0,0,0.80)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 2;
 
-let nextCue=0;
-renderer.setAnimationLoop(()=>{
-  if(!video.paused){
-    while(nextCue<CUES.length && video.currentTime>=CUES[nextCue].t){
-      showText(CUES[nextCue].text);
-      nextCue++;
+    const cx = canvas.width / 2;
+    let y = pad + lineH / 2;
+    for (const line of safeLines) {
+      ctx.fillText(line, cx, y);
+      y += lineH;
     }
-  }
-  if(textPlane) textPlane.quaternion.copy(camera.quaternion);
-  renderer.render(scene,camera);
-});
 
-document.getElementById("start").onclick=async()=>{
-  await video.play();
-  document.body.appendChild(VRButton.createButton(renderer));
-  document.getElementById("overlay").style.display="none";
-};
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    return tex;
+  }
+
+  // ---------- Three.js setup ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
+  camera.position.set(0, 1.6, 2.2);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
+
+  // Suelo sutil (referencia visual)
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(20, 20),
+    new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1, metalness: 0 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = 0;
+  scene.add(floor);
+
+  // ---------- VIDEO (ajustes QUEST) ----------
+  const video = document.createElement("video");
+  video.src = VIDEO_URL;
+  video.crossOrigin = "anonymous";
+
+  // 🔴 CLAVES para Quest + WebXR VideoTexture:
+  video.muted = true;                 // obligatorio para arrancar
+  video.playsInline = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.preload = "auto";
+  video.loop = false;
+
+  // pantalla flotante
+  const videoTex = new THREE.VideoTexture(video);
+  videoTex.colorSpace = THREE.SRGBColorSpace;
+
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.6, 0.9),
+    new THREE.MeshBasicMaterial({ map: videoTex })
+  );
+  screen.position.set(0, 1.6, -2.2);
+  scene.add(screen);
+
+  // Panel oscuro detrás para “modo cine”
+  const dimmer = new THREE.Mesh(
+    new THREE.PlaneGeometry(6, 4),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 })
+  );
+  dimmer.position.set(0, 1.6, -2.6);
+  scene.add(dimmer);
+
+  // ---------- TEXTO 3D ----------
+  let textPlane = null;
+  function setText3D(lines) {
+    const tex = makeTextTexture(lines);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false
+    });
+
+    const aspect = tex.image.width / tex.image.height;
+    const h = 0.28;
+    const w = h * aspect;
+
+    if (textPlane) {
+      textPlane.material.map.dispose();
+      textPlane.material.dispose();
+      textPlane.geometry.dispose();
+      scene.remove(textPlane);
+    }
+
+    textPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    textPlane.position.set(0, 1.25, -1.6);
+    scene.add(textPlane);
+  }
+
+  // ---------- CUES ----------
+  const cues = [...CUES].sort((a,b) => a.t - b.t);
+  let nextCue = 0;
+
+  function resyncCues(t) {
+    let idx = -1;
+    for (let i = 0; i < cues.length; i++) {
+      if (cues[i].t <= t) idx = i;
+      else break;
+    }
+    nextCue = idx + 1;
+    if (idx >= 0) setText3D(cues[idx].text);
+  }
+
+  // ---------- Loop ----------
+  renderer.setAnimationLoop(() => {
+    // fuerza actualización de textura (a veces ayuda en Quest)
+    if (video.readyState >= 2) videoTex.needsUpdate = true;
+
+    if (!video.paused && !video.ended) {
+      const t = video.currentTime;
+      while (nextCue < cues.length && t >= cues[nextCue].t) {
+        setText3D(cues[nextCue].text);
+        nextCue++;
+      }
+    }
+
+    if (textPlane) textPlane.quaternion.copy(camera.quaternion);
+    renderer.render(scene, camera);
+  });
+
+  // ---------- Resize ----------
+  window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ---------- Start flow ----------
+  const overlay = document.getElementById("overlay");
+  document.getElementById("start").addEventListener("click", async () => {
+    try {
+      // 🔴 Importantísimo: arrancar el vídeo (muted) ANTES de entrar en XR
+      await video.play();
+      resyncCues(video.currentTime);
+
+      // Ahora ya mostramos el botón de VR
+      document.body.appendChild(VRButton.createButton(renderer));
+
+      overlay.style.display = "none";
+    } catch (e) {
+      console.error("Error reproduciendo vídeo en Quest:", e);
+      alert("No se pudo iniciar el vídeo. Prueba a recargar y pulsar de nuevo.");
+    }
+  });
 </script>
 </body>
 </html>
