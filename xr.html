@@ -32,15 +32,15 @@
 <body>
 
 <div id="overlay">
-  <div class="card" id="card">
-    <h2 style="margin:0 0 10px 0;">Modo passthrough (AR) + vídeo flotante</h2>
+  <div class="card">
+    <h2 style="margin:0 0 10px 0;">Modo passthrough (AR)</h2>
     <p style="margin:0 0 14px 0;opacity:.9;">
-      1) Inicia el vídeo (muted). 2) Entra en AR (passthrough). Si AR no está disponible, entra en VR.
+      1) Inicia el vídeo (muted). 2) Entra en AR. El vídeo se reproduce en bucle.
     </p>
     <div>
       <button id="start">1) Iniciar vídeo</button>
-      <button id="enterAR" disabled>2) Entrar en AR (passthrough)</button>
-      <button id="enterVR" disabled>Entrar en VR (fallback)</button>
+      <button id="enterAR" disabled>2) Entrar en AR</button>
+      <button id="enterVR" disabled>Entrar en VR</button>
     </div>
     <div class="small" id="log"></div>
   </div>
@@ -51,87 +51,109 @@
   import { CUES, VIDEO_URL } from "./cues.js";
 
   const logEl = document.getElementById("log");
-  const log = (m) => { logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + m; };
+  const log = (m) => logEl.textContent += (logEl.textContent ? "\n" : "") + m;
 
-  // --- Renderer transparente para AR passthrough ---
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  /* --------------------------------------------------
+     1) CARGA DE FUENTE PERSONALIZADA (PRISTINA.TTF)
+  -------------------------------------------------- */
+  let PRISTINA_READY = false;
+
+  async function loadPristinaFont() {
+    try {
+      const font = new FontFace("PristinaAR", "url(./PRISTINA.TTF)");
+      await font.load();
+      document.fonts.add(font);
+      PRISTINA_READY = true;
+      log("✅ Fuente PRISTINA cargada");
+    } catch (e) {
+      log("❌ No se pudo cargar PRISTINA.TTF");
+    }
+  }
+
+  await loadPristinaFont();
+
+  /* --------------------------------------------------
+     2) THREE.JS + WEBXR
+  -------------------------------------------------- */
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = null; // clave en AR
+  scene.background = null;
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
-  camera.position.set(0, 1.6, 2.2);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 50);
+  camera.position.set(0, 1.6, 2);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
 
-  // --- Vídeo (Quest-friendly) ---
+  /* --------------------------------------------------
+     3) VIDEO (LOOP INFINITO)
+  -------------------------------------------------- */
   const video = document.createElement("video");
   video.src = VIDEO_URL;
   video.crossOrigin = "anonymous";
   video.muted = true;
-  video.setAttribute("muted", "");
-  video.volume = 0;
+  video.loop = true;                     // 🔁 LOOP
   video.playsInline = true;
   video.setAttribute("playsinline", "");
   video.setAttribute("webkit-playsinline", "");
   video.preload = "auto";
-  video.loop = false;
 
-  // Añadir al DOM (ayuda en Quest)
   video.style.position = "fixed";
   video.style.left = "-9999px";
-  video.style.top = "-9999px";
-  video.width = 1; video.height = 1;
   document.body.appendChild(video);
 
   const videoTex = new THREE.VideoTexture(video);
   videoTex.colorSpace = THREE.SRGBColorSpace;
 
-  // Pantalla flotante (MÁS CERCA)
   const screen = new THREE.Mesh(
     new THREE.PlaneGeometry(1.6, 0.9),
-    new THREE.MeshBasicMaterial({ map: videoTex, transparent: true })
+    new THREE.MeshBasicMaterial({ map: videoTex, transparent:true })
   );
-  screen.position.set(0, 1.55, -1.35); // <-- más cerca
+  screen.position.set(0, 1.55, -1.35);
   scene.add(screen);
 
-  // Panel oscuro detrás (modo cine, opcional)
-  const dimmer = new THREE.Mesh(
-    new THREE.PlaneGeometry(6, 4),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
-  );
-  dimmer.position.set(0, 1.55, -1.75); // detrás de la pantalla
-  scene.add(dimmer);
-
-  // --- Texto 3D (canvas -> textura) ---
+  /* --------------------------------------------------
+     4) TEXTO 3D CON PRISTINA
+  -------------------------------------------------- */
   function makeTextTexture(lines) {
     const safe = Array.isArray(lines) ? lines : [String(lines)];
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-    const pad = 34, fontPx = 52, lineH = 72, maxW = 1400;
 
-    ctx.font = `${fontPx}px system-ui, Arial`;
-    const w = Math.min(maxW, Math.max(...safe.map(l => ctx.measureText(l).width)) + pad * 2);
-    const h = safe.length * lineH + pad * 2;
+    const pad = 36;
+    const fontPx = 56;
+    const lineH = 78;
+    const maxW = 1400;
+
+    const fontName = PRISTINA_READY ? "PristinaAR" : "serif";
+    ctx.font = `${fontPx}px ${fontName}`;
+
+    const w = Math.min(
+      maxW,
+      Math.max(...safe.map(l => ctx.measureText(l).width)) + pad*2
+    );
+    const h = safe.length * lineH + pad*2;
 
     canvas.width = Math.ceil(w);
     canvas.height = Math.ceil(h);
 
-    ctx.font = `${fontPx}px system-ui, Arial`;
+    ctx.font = `${fontPx}px ${fontName}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
-    ctx.shadowColor = "rgba(0,0,0,0.80)";
-    ctx.shadowBlur = 18;
+    ctx.fillStyle = "rgba(255,255,255,0.96)";
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 20;
     ctx.shadowOffsetY = 2;
 
-    const cx = canvas.width / 2;
-    let y = pad + lineH / 2;
-    for (const line of safe) { ctx.fillText(line, cx, y); y += lineH; }
+    let y = pad + lineH/2;
+    for (const line of safe) {
+      ctx.fillText(line, canvas.width/2, y);
+      y += lineH;
+    }
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
@@ -143,10 +165,11 @@
   let textPlane = null;
   function setText3D(lines) {
     const tex = makeTextTexture(lines);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent:true, depthWrite:false });
 
     const aspect = tex.image.width / tex.image.height;
-    const h = 0.28, w = h * aspect;
+    const h = 0.3;
+    const w = h * aspect;
 
     if (textPlane) {
       textPlane.material.map.dispose();
@@ -156,19 +179,16 @@
     }
 
     textPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
-
-    // TEXTO MÁS CERCA y FIJO EN EL MUNDO
-    textPlane.position.set(0, 1.23, -1.05); // <-- más cerca
-
-    // Orientación fija (no sigue la cabeza). Déjalo así por defecto.
-    textPlane.rotation.set(0, 0, 0);
-
+    textPlane.position.set(0, 1.23, -1.05); // fijo en el mundo
     scene.add(textPlane);
   }
 
-  // --- Cues ---
+  /* --------------------------------------------------
+     5) CUES
+  -------------------------------------------------- */
   const cues = [...CUES].sort((a,b)=>a.t-b.t);
   let nextCue = 0;
+
   function resyncCues(t){
     let idx=-1;
     for(let i=0;i<cues.length;i++){ if(cues[i].t<=t) idx=i; else break; }
@@ -176,92 +196,56 @@
     if(idx>=0) setText3D(cues[idx].text);
   }
 
-  // --- Render loop ---
-  renderer.setAnimationLoop(() => {
+  renderer.setAnimationLoop(()=>{
     if (video.readyState >= 2) videoTex.needsUpdate = true;
 
-    if (!video.paused && !video.ended) {
-      const t = video.currentTime;
-      while (nextCue < cues.length && t >= cues[nextCue].t) {
-        setText3D(cues[nextCue].text);
-        nextCue++;
-      }
+    const t = video.currentTime;
+    while (nextCue < cues.length && t >= cues[nextCue].t) {
+      setText3D(cues[nextCue].text);
+      nextCue++;
     }
-
-    // IMPORTANTE: quitado el "billboard"
-    // El texto NO copia la rotación de la cámara, así que NO se mueve con la cabeza.
-    // if (textPlane) textPlane.quaternion.copy(camera.quaternion);
 
     renderer.render(scene, camera);
   });
 
-  window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // --- Botones ---
+  /* --------------------------------------------------
+     6) BOTONES AR / VR
+  -------------------------------------------------- */
   const btnStart = document.getElementById("start");
   const btnAR = document.getElementById("enterAR");
   const btnVR = document.getElementById("enterVR");
 
-  async function enterSession(mode) {
-    if (!navigator.xr) throw new Error("WebXR no disponible en este navegador.");
-
-    const optionalFeatures = [
-      "local-floor",
-      "bounded-floor",
-      "hand-tracking",
-      "layers",
-      "anchors",
-      "hit-test"
-    ];
-
-    const session = await navigator.xr.requestSession(mode, { optionalFeatures });
+  async function enterSession(mode){
+    const session = await navigator.xr.requestSession(mode, {
+      optionalFeatures:["local-floor","bounded-floor","hand-tracking"]
+    });
     renderer.xr.setSession(session);
-    log(`✅ Sesión iniciada: ${mode}`);
-
-    session.addEventListener("end", () => log(`ℹ️ Sesión finalizada: ${mode}`));
   }
 
-  btnStart.addEventListener("click", async () => {
-    try {
-      log("Iniciando vídeo (muted)...");
-      video.load();
-      await video.play();
-      resyncCues(video.currentTime);
-      log("✅ Vídeo OK. Ya puedes entrar en AR o VR.");
+  btnStart.onclick = async () => {
+    await video.play();
+    resyncCues(video.currentTime);
+    btnAR.disabled = false;
+    btnVR.disabled = false;
+    log("▶️ Vídeo iniciado en bucle");
+  };
 
-      btnAR.disabled = false;
-      btnVR.disabled = false;
-    } catch (e) {
-      log(`❌ Error vídeo: ${e?.name || "Error"}: ${e?.message || e}`);
-    }
-  });
-
-  btnAR.addEventListener("click", async () => {
-    try {
-      const ok = await navigator.xr?.isSessionSupported?.("immersive-ar");
-      log(`isSessionSupported(immersive-ar): ${ok}`);
-      if (!ok) throw new Error("immersive-ar no soportado en este Quest Browser.");
+  btnAR.onclick = async () => {
+    if (await navigator.xr.isSessionSupported("immersive-ar")) {
       await enterSession("immersive-ar");
-      document.getElementById("overlay").style.display = "none";
-    } catch (e) {
-      log(`❌ AR no disponible: ${e?.message || e}\nPrueba VR (fallback).`);
+      overlay.style.display="none";
     }
-  });
+  };
 
-  btnVR.addEventListener("click", async () => {
-    try {
-      const ok = await navigator.xr?.isSessionSupported?.("immersive-vr");
-      log(`isSessionSupported(immersive-vr): ${ok}`);
-      if (!ok) throw new Error("immersive-vr no soportado (raro).");
-      await enterSession("immersive-vr");
-      document.getElementById("overlay").style.display = "none";
-    } catch (e) {
-      log(`❌ VR no disponible: ${e?.message || e}`);
-    }
+  btnVR.onclick = async () => {
+    await enterSession("immersive-vr");
+    overlay.style.display="none";
+  };
+
+  window.addEventListener("resize", ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
   });
 </script>
 </body>
