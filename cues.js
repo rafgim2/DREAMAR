@@ -1,5 +1,5 @@
 // URL del vídeo (GitHub Pages, mismo directorio)
-export const VIDEO_URL = "https://pub-aa6ee859836d478ca4ac85eb9f71f0c3.r2.dev/dreamurl5.mp4";
+export const VIDEO_URL = "https://pub-aa6ee859836d478ca4ac85eb9f71f0c3.r2.dev/dreamurl6.mp4";
 
 // 8 grupos de versos con segundos exactos
 export const CUES = [
@@ -12,6 +12,7 @@ export const CUES = [
   { t: 70.0, text: ["Verso 7 línea 1", "Verso 7 línea 2"] },
   { t: 82.0, text: ["Verso 8 línea 1", "Verso 8 línea 2"] },
 ];
+
 
 
 
