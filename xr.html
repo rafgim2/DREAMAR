@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>XR Video (AR/MR)</title>
+  <title>XR Video (AR/MR) + Texto 3D</title>
   <style>
     html,body{margin:0;height:100%;background:#000;overflow:hidden}
     #overlay{
@@ -12,7 +12,7 @@
       z-index:10;text-align:center;padding:24px;
     }
     .card{
-      max-width:820px;width:100%;
+      max-width:860px;width:100%;
       background:rgba(255,255,255,.06);
       border:1px solid rgba(255,255,255,.12);
       border-radius:18px;padding:20px;
@@ -29,15 +29,15 @@
 <body>
 
 <div id="overlay">
-  <div class="card" id="card">
-    <h2 style="margin:0 0 10px 0;">Modo passthrough (AR) + vídeo flotante</h2>
+  <div class="card">
+    <h2 style="margin:0 0 10px 0;">Passthrough + vídeo flotante + texto 3D</h2>
     <p style="margin:0 0 14px 0;opacity:.9;">
       1) Inicia el vídeo (muted). 2) Entra en AR (passthrough). Si AR no está disponible, entra en VR.
     </p>
     <div>
       <button id="start">1) Iniciar vídeo</button>
-      <button id="enterAR" disabled>2) Entrar en AR (passthrough)</button>
-      <button id="enterVR" disabled>Entrar en VR (fallback)</button>
+      <button id="enterAR" disabled>2) Entrar en AR</button>
+      <button id="enterVR" disabled>Entrar en VR</button>
     </div>
     <div class="small" id="log"></div>
   </div>
@@ -45,12 +45,13 @@
 
 <script type="module">
   import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+  import { Text } from "https://unpkg.com/troika-three-text@0.49.0/dist/troika-three-text.esm.js";
   import { CUES, VIDEO_URL } from "./cues.js";
 
   const logEl = document.getElementById("log");
   const log = (m) => { logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + m; };
 
-  // --- Renderer transparente para que en AR se vea passthrough ---
+  // Renderer transparente para passthrough
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -58,14 +59,14 @@
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = null; // <-- clave para AR
+  scene.background = null;
 
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
   camera.position.set(0, 1.6, 2.2);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
 
-  // --- Vídeo (ajustes Quest) ---
+  // ---------- Vídeo (Quest friendly) ----------
   const video = document.createElement("video");
   video.src = VIDEO_URL;
   video.crossOrigin = "anonymous";
@@ -77,7 +78,7 @@
   video.setAttribute("webkit-playsinline", "");
   video.preload = "auto";
 
-  // Añadir al DOM (a veces ayuda en Quest)
+  // Añadir al DOM (mejora compatibilidad)
   video.style.position = "fixed";
   video.style.left = "-9999px";
   video.style.top = "-9999px";
@@ -87,6 +88,7 @@
   const videoTex = new THREE.VideoTexture(video);
   videoTex.colorSpace = THREE.SRGBColorSpace;
 
+  // Pantalla flotante
   const screen = new THREE.Mesh(
     new THREE.PlaneGeometry(1.6, 0.9),
     new THREE.MeshBasicMaterial({ map: videoTex, transparent: true })
@@ -94,76 +96,100 @@
   screen.position.set(0, 1.6, -2.2);
   scene.add(screen);
 
-  // --- Texto 3D (canvas -> textura) ---
-  function makeTextTexture(lines) {
-    const safe = Array.isArray(lines) ? lines : [String(lines)];
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    const pad = 34, fontPx = 52, lineH = 72, maxW = 1400;
+  // “Telón” oscuro detrás para concentrar la vista
+  const dimmer = new THREE.Mesh(
+    new THREE.PlaneGeometry(6, 4),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
+  );
+  dimmer.position.set(0, 1.6, -2.6);
+  scene.add(dimmer);
 
-    ctx.font = `${fontPx}px system-ui, Arial`;
-    const w = Math.min(maxW, Math.max(...safe.map(l => ctx.measureText(l).width)) + pad * 2);
-    const h = safe.length * lineH + pad * 2;
-    canvas.width = Math.ceil(w);
-    canvas.height = Math.ceil(h);
+  // ---------- TEXTO 3D REAL (Troika) + “cuerpo” por capas ----------
+  const textFront = new Text();
+  textFront.text = "";
+  textFront.fontSize = 0.095;     // tamaño físico
+  textFront.lineHeight = 1.15;
+  textFront.maxWidth = 1.15;
+  textFront.anchorX = "center";
+  textFront.anchorY = "middle";
+  textFront.color = 0xffffff;
 
-    ctx.font = `${fontPx}px system-ui, Arial`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
-    ctx.shadowColor = "rgba(0,0,0,0.80)";
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 2;
+  // “borde” fino para legibilidad en passthrough
+  textFront.outlineWidth = 0.004;
+  textFront.outlineColor = 0x000000;
+  textFront.outlineOpacity = 0.55;
 
-    const cx = canvas.width / 2;
-    let y = pad + lineH / 2;
-    for (const line of safe) { ctx.fillText(line, cx, y); y += lineH; }
+  // Más cerca del usuario
+  textFront.position.set(0, 1.30, -1.05);
+  scene.add(textFront);
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
-    return tex;
+  // Capas traseras (simulan extrusión)
+  const EXTRUDE_LAYERS = 10;
+  const EXTRUDE_STEP = 0.0035;
+  const extrudeMeshes = [];
+
+  for (let i = 1; i <= EXTRUDE_LAYERS; i++) {
+    const t = new Text();
+    t.text = "";
+    t.fontSize = textFront.fontSize;
+    t.lineHeight = textFront.lineHeight;
+    t.maxWidth = textFront.maxWidth;
+    t.anchorX = textFront.anchorX;
+    t.anchorY = textFront.anchorY;
+
+    t.color = 0x1a1a1a;      // “cuerpo” oscuro
+    t.outlineWidth = 0;      // solo el frontal lleva outline
+
+    t.position.set(
+      textFront.position.x,
+      textFront.position.y,
+      textFront.position.z - i * EXTRUDE_STEP
+    );
+
+    scene.add(t);
+    extrudeMeshes.push(t);
   }
 
-  let textPlane = null;
-  function setText3D(lines) {
-    const tex = makeTextTexture(lines);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
-    const aspect = tex.image.width / tex.image.height;
-    const h = 0.28, w = h * aspect;
+  async function setText3D(lines) {
+    const content = Array.isArray(lines) ? lines.join("\n") : String(lines);
 
-    if (textPlane) {
-      textPlane.material.map.dispose();
-      textPlane.material.dispose();
-      textPlane.geometry.dispose();
-      scene.remove(textPlane);
+    textFront.text = content;
+    await textFront.sync();
+
+    for (const t of extrudeMeshes) {
+      t.text = content;
+      await t.sync();
     }
-    textPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
-    textPlane.position.set(0, 1.25, -1.6);
-    scene.add(textPlane);
   }
 
+  // ---------- Cues ----------
   const cues = [...CUES].sort((a,b)=>a.t-b.t);
   let nextCue = 0;
-  function resyncCues(t){
+
+  async function resyncCues(t){
     let idx=-1;
     for(let i=0;i<cues.length;i++){ if(cues[i].t<=t) idx=i; else break; }
     nextCue = idx+1;
-    if(idx>=0) setText3D(cues[idx].text);
+    if(idx>=0) await setText3D(cues[idx].text);
   }
 
+  // ---------- Loop ----------
   renderer.setAnimationLoop(() => {
     if (video.readyState >= 2) videoTex.needsUpdate = true;
 
     if (!video.paused && !video.ended) {
       const t = video.currentTime;
       while (nextCue < cues.length && t >= cues[nextCue].t) {
+        // Nota: no esperamos aquí para no bloquear el frame
         setText3D(cues[nextCue].text);
         nextCue++;
       }
     }
-    if (textPlane) textPlane.quaternion.copy(camera.quaternion);
+
+    // Billboard: que mire al usuario
+    textFront.quaternion.copy(camera.quaternion);
+    for (const t of extrudeMeshes) t.quaternion.copy(camera.quaternion);
+
     renderer.render(scene, camera);
   });
 
@@ -173,11 +199,7 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // --- Botones ---
-  const btnStart = document.getElementById("start");
-  const btnAR = document.getElementById("enterAR");
-  const btnVR = document.getElementById("enterVR");
-
+  // ---------- Sesiones AR/VR ----------
   async function enterSession(mode) {
     if (!navigator.xr) throw new Error("WebXR no disponible en este navegador.");
 
@@ -187,24 +209,26 @@
       "hand-tracking",
       "layers",
       "anchors",
-      "hit-test",
-      "dom-overlay"
+      "hit-test"
     ];
 
-    // En AR solemos usar local-floor
     const session = await navigator.xr.requestSession(mode, { optionalFeatures });
     renderer.xr.setSession(session);
     log(`✅ Sesión iniciada: ${mode}`);
-
     session.addEventListener("end", () => log(`ℹ️ Sesión finalizada: ${mode}`));
   }
+
+  // ---------- UI ----------
+  const btnStart = document.getElementById("start");
+  const btnAR = document.getElementById("enterAR");
+  const btnVR = document.getElementById("enterVR");
 
   btnStart.addEventListener("click", async () => {
     try {
       log("Iniciando vídeo (muted)...");
       video.load();
       await video.play();
-      resyncCues(video.currentTime);
+      await resyncCues(video.currentTime);
       log("✅ Vídeo OK. Ya puedes entrar en AR o VR.");
 
       btnAR.disabled = false;
