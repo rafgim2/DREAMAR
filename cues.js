@@ -3,7 +3,7 @@ export const VIDEO_URL = "https://interactive-examples.mdn.mozilla.net/media/cc0
 
 // 8 grupos de versos con segundos exactos
 export const CUES = [
-  { t: 3.0,  text: ["Verso 1 línea 1", "Verso 1 línea 2"] },
+  { t: 3.0,  text: ["El día se despide sin hacer ruido,", " como si supiera que aún no es el final… "] },
   { t: 12.5, text: ["Verso 2 línea 1", "Verso 2 línea 2"] },
   { t: 23.1, text: ["Verso 3 línea 1", "Verso 3 línea 2"] },
   { t: 34.2, text: ["Verso 4 línea 1", "Verso 4 línea 2"] },
@@ -12,4 +12,5 @@ export const CUES = [
   { t: 70.0, text: ["Verso 7 línea 1", "Verso 7 línea 2"] },
   { t: 82.0, text: ["Verso 8 línea 1", "Verso 8 línea 2"] },
 ];
+
 
