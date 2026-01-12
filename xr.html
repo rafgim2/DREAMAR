@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>XR AR + Video + Texto 3D (Debug)</title>
+  <title>XR Video (AR/MR)</title>
   <style>
     html,body{margin:0;height:100%;background:#000;overflow:hidden}
     #overlay{
@@ -12,7 +12,7 @@
       z-index:10;text-align:center;padding:24px;
     }
     .card{
-      max-width:900px;width:100%;
+      max-width:820px;width:100%;
       background:rgba(255,255,255,.06);
       border:1px solid rgba(255,255,255,.12);
       border-radius:18px;padding:20px;
@@ -23,61 +23,55 @@
       background:rgba(255,255,255,.1);
       color:#fff;cursor:pointer;margin:6px;
     }
-    .log{
-      opacity:.85;font-size:14px;line-height:1.35;
-      margin-top:12px;white-space:pre-wrap;text-align:left
+    .small{
+      opacity:.75;font-size:14px;line-height:1.4;margin-top:10px;
+      white-space:pre-wrap;text-align:left
     }
   </style>
 </head>
 <body>
 
 <div id="overlay">
-  <div class="card">
-    <h2 style="margin:0 0 8px 0;">AR passthrough + vídeo flotante + texto 3D</h2>
-    <p style="margin:0 0 12px 0;opacity:.9;">
-      1) Inicia el vídeo (muted) · 2) Entra en AR · si no, usa VR
+  <div class="card" id="card">
+    <h2 style="margin:0 0 10px 0;">Modo passthrough (AR) + vídeo flotante</h2>
+    <p style="margin:0 0 14px 0;opacity:.9;">
+      1) Inicia el vídeo (muted). 2) Entra en AR (passthrough). Si AR no está disponible, entra en VR.
     </p>
     <div>
       <button id="start">1) Iniciar vídeo</button>
-      <button id="enterAR" disabled>2) Entrar en AR</button>
-      <button id="enterVR" disabled>Entrar en VR</button>
+      <button id="enterAR" disabled>2) Entrar en AR (passthrough)</button>
+      <button id="enterVR" disabled>Entrar en VR (fallback)</button>
     </div>
-    <div class="log" id="log"></div>
+    <div class="small" id="log"></div>
   </div>
 </div>
 
 <script type="module">
-  import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-  import { FontLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/FontLoader.js";
-  import { TextGeometry } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/geometries/TextGeometry.js";
+  import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
   import { CUES, VIDEO_URL } from "./cues.js";
 
-  const overlay = document.getElementById("overlay");
   const logEl = document.getElementById("log");
-  const log = (m) => { logEl.textContent += (logEl.textContent ? "\n" : "") + m; };
+  const log = (m) => { logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + m; };
 
-  // ---------------- Renderer / escena (alpha para passthrough) ----------------
-  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  // --- Renderer transparente para AR passthrough ---
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = null;
+  scene.background = null; // clave en AR
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 50);
-  camera.position.set(0, 1.6, 2);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
+  camera.position.set(0, 1.6, 2.2);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
-  scene.add(new THREE.DirectionalLight(0xffffff, 0.6));
 
-  // ---------------- Vídeo (Quest friendly + debug) ----------------
+  // --- Vídeo (Quest-friendly) ---
   const video = document.createElement("video");
   video.src = VIDEO_URL;
   video.crossOrigin = "anonymous";
-
-  // Claves Quest
   video.muted = true;
   video.setAttribute("muted", "");
   video.volume = 0;
@@ -85,120 +79,105 @@
   video.setAttribute("playsinline", "");
   video.setAttribute("webkit-playsinline", "");
   video.preload = "auto";
+  video.loop = false;
 
-  // Algunos Quest necesitan el vídeo en el DOM
+  // Añadir al DOM (ayuda en Quest)
   video.style.position = "fixed";
   video.style.left = "-9999px";
   video.style.top = "-9999px";
-  video.width = 1;
-  video.height = 1;
+  video.width = 1; video.height = 1;
   document.body.appendChild(video);
-
-  video.addEventListener("error", () => {
-    const err = video.error;
-    log(`❌ video.error: code=${err?.code} message=${err?.message || "(sin mensaje)"}`);
-  });
 
   const videoTex = new THREE.VideoTexture(video);
   videoTex.colorSpace = THREE.SRGBColorSpace;
-  videoTex.minFilter = THREE.LinearFilter;
-  videoTex.magFilter = THREE.LinearFilter;
 
+  // Pantalla flotante (MÁS CERCA)
   const screen = new THREE.Mesh(
     new THREE.PlaneGeometry(1.6, 0.9),
     new THREE.MeshBasicMaterial({ map: videoTex, transparent: true })
   );
-  screen.position.set(0, 1.6, -2.2);
+  screen.position.set(0, 1.55, -1.35); // <-- más cerca
   scene.add(screen);
 
-  // Panel oscuro detrás (para destacar vídeo/partículas)
+  // Panel oscuro detrás (modo cine, opcional)
   const dimmer = new THREE.Mesh(
     new THREE.PlaneGeometry(6, 4),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 })
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
   );
-  dimmer.position.set(0, 1.6, -2.6);
+  dimmer.position.set(0, 1.55, -1.75); // detrás de la pantalla
   scene.add(dimmer);
 
-  // ---------------- Texto 3D extruido (fuente en la raíz) ----------------
-  const FONT_URL = "./helvetiker_regular.typeface.json";
-  const fontLoader = new FontLoader();
-  let font = null;
-  let textGroup = null;
+  // --- Texto 3D (canvas -> textura) ---
+  function makeTextTexture(lines) {
+    const safe = Array.isArray(lines) ? lines : [String(lines)];
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const pad = 34, fontPx = 52, lineH = 72, maxW = 1400;
 
-  const textMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0.05 });
-  const TEXT_SIZE = 0.085;
-  const TEXT_DEPTH = 0.02;
-  const LINE_GAP = 0.11;
-  const TEXT_POS = new THREE.Vector3(0, 1.35, -1.0); // más cerca
+    ctx.font = `${fontPx}px system-ui, Arial`;
+    const w = Math.min(maxW, Math.max(...safe.map(l => ctx.measureText(l).width)) + pad * 2);
+    const h = safe.length * lineH + pad * 2;
 
-  function loadFont(){
-    if (font) return Promise.resolve(font);
-    return new Promise((res, rej) => {
-      fontLoader.load(FONT_URL, f => { font = f; res(f); }, undefined, e => rej(e));
-    });
+    canvas.width = Math.ceil(w);
+    canvas.height = Math.ceil(h);
+
+    ctx.font = `${fontPx}px system-ui, Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.shadowColor = "rgba(0,0,0,0.80)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 2;
+
+    const cx = canvas.width / 2;
+    let y = pad + lineH / 2;
+    for (const line of safe) { ctx.fillText(line, cx, y); y += lineH; }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    return tex;
   }
 
-  function clearText(){
-    if(!textGroup) return;
-    textGroup.traverse(o => { if(o.isMesh) o.geometry.dispose(); });
-    scene.remove(textGroup);
-    textGroup = null;
-  }
+  let textPlane = null;
+  function setText3D(lines) {
+    const tex = makeTextTexture(lines);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
 
-  function lineMesh(txt){
-    const geo = new TextGeometry(txt, {
-      font,
-      size: TEXT_SIZE,
-      height: TEXT_DEPTH,
-      bevelEnabled: true,
-      bevelThickness: 0.004,
-      bevelSize: 0.003,
-      bevelSegments: 3
-    });
-    geo.computeBoundingBox();
-    const w = geo.boundingBox.max.x - geo.boundingBox.min.x;
-    geo.translate(-w/2, 0, 0);
-    return new THREE.Mesh(geo, textMat);
-  }
+    const aspect = tex.image.width / tex.image.height;
+    const h = 0.28, w = h * aspect;
 
-  async function setText3D(lines){
-    try {
-      await loadFont();
-      clearText();
-
-      const arr = Array.isArray(lines) ? lines : [String(lines)];
-      textGroup = new THREE.Group();
-
-      arr.forEach((l, i) => {
-        const m = lineMesh(l);
-        m.position.y = ((arr.length - 1) * LINE_GAP) / 2 - i * LINE_GAP;
-        textGroup.add(m);
-      });
-
-      textGroup.position.copy(TEXT_POS);
-      scene.add(textGroup);
-    } catch (e) {
-      log(`❌ Fuente/texto 3D: ${e?.message || e}`);
+    if (textPlane) {
+      textPlane.material.map.dispose();
+      textPlane.material.dispose();
+      textPlane.geometry.dispose();
+      scene.remove(textPlane);
     }
+
+    textPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+
+    // TEXTO MÁS CERCA y FIJO EN EL MUNDO
+    textPlane.position.set(0, 1.23, -1.05); // <-- más cerca
+
+    // Orientación fija (no sigue la cabeza). Déjalo así por defecto.
+    textPlane.rotation.set(0, 0, 0);
+
+    scene.add(textPlane);
   }
 
-  // ---------------- Cues ----------------
-  const cues = [...CUES].sort((a,b) => a.t - b.t);
+  // --- Cues ---
+  const cues = [...CUES].sort((a,b)=>a.t-b.t);
   let nextCue = 0;
-
-  function resync(t){
-    let idx = -1;
-    for(let i=0;i<cues.length;i++){
-      if (cues[i].t <= t) idx = i;
-      else break;
-    }
-    nextCue = idx + 1;
-    if (idx >= 0) setText3D(cues[idx].text);
+  function resyncCues(t){
+    let idx=-1;
+    for(let i=0;i<cues.length;i++){ if(cues[i].t<=t) idx=i; else break; }
+    nextCue = idx+1;
+    if(idx>=0) setText3D(cues[idx].text);
   }
 
-  // ---------------- Loop ----------------
-  let lastDiag = 0;
-  renderer.setAnimationLoop((time) => {
+  // --- Render loop ---
+  renderer.setAnimationLoop(() => {
     if (video.readyState >= 2) videoTex.needsUpdate = true;
 
     if (!video.paused && !video.ended) {
@@ -209,13 +188,9 @@
       }
     }
 
-    if (textGroup) textGroup.quaternion.copy(camera.quaternion);
-
-    // diagnóstico cada ~1s
-    if (time - lastDiag > 1000) {
-      lastDiag = time;
-      log(`diag: readyState=${video.readyState} paused=${video.paused} t=${video.currentTime.toFixed(2)} ended=${video.ended}`);
-    }
+    // IMPORTANTE: quitado el "billboard"
+    // El texto NO copia la rotación de la cámara, así que NO se mueve con la cabeza.
+    // if (textPlane) textPlane.quaternion.copy(camera.quaternion);
 
     renderer.render(scene, camera);
   });
@@ -226,63 +201,68 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // ---------------- AR / VR ----------------
-  const startBtn = document.getElementById("start");
-  const arBtn = document.getElementById("enterAR");
-  const vrBtn = document.getElementById("enterVR");
+  // --- Botones ---
+  const btnStart = document.getElementById("start");
+  const btnAR = document.getElementById("enterAR");
+  const btnVR = document.getElementById("enterVR");
 
-  async function enter(mode){
-    const session = await navigator.xr.requestSession(mode, {
-      optionalFeatures: ["local-floor", "hit-test", "anchors"]
-    });
+  async function enterSession(mode) {
+    if (!navigator.xr) throw new Error("WebXR no disponible en este navegador.");
+
+    const optionalFeatures = [
+      "local-floor",
+      "bounded-floor",
+      "hand-tracking",
+      "layers",
+      "anchors",
+      "hit-test"
+    ];
+
+    const session = await navigator.xr.requestSession(mode, { optionalFeatures });
     renderer.xr.setSession(session);
-    log(`✅ Sesión: ${mode}`);
+    log(`✅ Sesión iniciada: ${mode}`);
+
+    session.addEventListener("end", () => log(`ℹ️ Sesión finalizada: ${mode}`));
   }
 
-  startBtn.onclick = async () => {
+  btnStart.addEventListener("click", async () => {
     try {
-      log(`VIDEO_URL = ${VIDEO_URL}`);
-      log("Iniciando vídeo…");
+      log("Iniciando vídeo (muted)...");
       video.load();
       await video.play();
+      resyncCues(video.currentTime);
+      log("✅ Vídeo OK. Ya puedes entrar en AR o VR.");
 
-      // Forzamos un pequeño “kick” de tiempo (a veces ayuda a activar frames)
-      try { video.currentTime = Math.max(0, video.currentTime + 0.001); } catch {}
-
-      await loadFont();
-      resync(video.currentTime);
-
-      arBtn.disabled = false;
-      vrBtn.disabled = false;
-      log("✅ Start OK (vídeo + fuente). Ya puedes entrar en AR/VR.");
+      btnAR.disabled = false;
+      btnVR.disabled = false;
     } catch (e) {
-      log(`❌ Start error: ${e?.name || "Error"}: ${e?.message || e}`);
+      log(`❌ Error vídeo: ${e?.name || "Error"}: ${e?.message || e}`);
     }
-  };
+  });
 
-  arBtn.onclick = async () => {
+  btnAR.addEventListener("click", async () => {
     try {
-      const ok = await navigator.xr.isSessionSupported("immersive-ar");
-      log(`isSessionSupported(immersive-ar)=${ok}`);
-      if (!ok) throw new Error("immersive-ar no soportado");
-      await enter("immersive-ar");
-      overlay.style.display = "none";
+      const ok = await navigator.xr?.isSessionSupported?.("immersive-ar");
+      log(`isSessionSupported(immersive-ar): ${ok}`);
+      if (!ok) throw new Error("immersive-ar no soportado en este Quest Browser.");
+      await enterSession("immersive-ar");
+      document.getElementById("overlay").style.display = "none";
     } catch (e) {
-      log(`❌ AR: ${e?.message || e}`);
+      log(`❌ AR no disponible: ${e?.message || e}\nPrueba VR (fallback).`);
     }
-  };
+  });
 
-  vrBtn.onclick = async () => {
+  btnVR.addEventListener("click", async () => {
     try {
-      const ok = await navigator.xr.isSessionSupported("immersive-vr");
-      log(`isSessionSupported(immersive-vr)=${ok}`);
-      if (!ok) throw new Error("immersive-vr no soportado");
-      await enter("immersive-vr");
-      overlay.style.display = "none";
+      const ok = await navigator.xr?.isSessionSupported?.("immersive-vr");
+      log(`isSessionSupported(immersive-vr): ${ok}`);
+      if (!ok) throw new Error("immersive-vr no soportado (raro).");
+      await enterSession("immersive-vr");
+      document.getElementById("overlay").style.display = "none";
     } catch (e) {
-      log(`❌ VR: ${e?.message || e}`);
+      log(`❌ VR no disponible: ${e?.message || e}`);
     }
-  };
+  });
 </script>
 </body>
 </html>
