@@ -1,5 +1,5 @@
 // URL del vídeo (GitHub Pages, mismo directorio)
-export const VIDEO_URL = "./dream-ar5.mp4";
+export const VIDEO_URL = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
 
 // 8 grupos de versos con segundos exactos
 export const CUES = [
@@ -12,3 +12,4 @@ export const CUES = [
   { t: 70.0, text: ["Verso 7 línea 1", "Verso 7 línea 2"] },
   { t: 82.0, text: ["Verso 8 línea 1", "Verso 8 línea 2"] },
 ];
+
