@@ -33,9 +33,9 @@
 
 <div id="overlay">
   <div class="card">
-    <h2 style="margin:0 0 10px 0;">Modo passthrough (AR)</h2>
+    <h2 style="margin:0 0 10px 0;">AR + vídeo + texto “escritura” estable</h2>
     <p style="margin:0 0 14px 0;opacity:.9;">
-      1) Inicia el vídeo (muted). 2) Entra en AR. Texto con efecto “escritura a mano”.
+      El texto se escribe letra a letra sin recolocarse (tamaño fijo por cue).
     </p>
     <div>
       <button id="start">1) Iniciar vídeo</button>
@@ -54,9 +54,7 @@
   const logEl = document.getElementById("log");
   const log = (m) => logEl.textContent += (logEl.textContent ? "\n" : "") + m;
 
-  /* ---------------------------
-     FUENTE PRISTINA (Canvas)
-  --------------------------- */
+  // ---------- Fuente PRISTINA ----------
   let PRISTINA_READY = false;
   async function loadPristinaFont() {
     try {
@@ -70,10 +68,9 @@
     }
   }
   await loadPristinaFont();
+  const fontName = () => (PRISTINA_READY ? "PristinaAR" : "serif");
 
-  /* ---------------------------
-     THREE + WEBXR
-  --------------------------- */
+  // ---------- Three.js ----------
   const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -88,9 +85,7 @@
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
 
-  /* ---------------------------
-     VIDEO (loop)
-  --------------------------- */
+  // ---------- Vídeo (loop) ----------
   const video = document.createElement("video");
   video.src = VIDEO_URL;
   video.crossOrigin = "anonymous";
@@ -103,7 +98,6 @@
   video.setAttribute("webkit-playsinline", "");
   video.preload = "auto";
 
-  // Añadir al DOM (Quest-friendly)
   video.style.position = "fixed";
   video.style.left = "-9999px";
   video.style.top = "-9999px";
@@ -120,181 +114,187 @@
   screen.position.set(0, 1.55, -1.35);
   scene.add(screen);
 
-  /* ---------------------------
-     TEXTO 3D + EFECTO ESCRITURA
-  --------------------------- */
-  const fontName = () => (PRISTINA_READY ? "PristinaAR" : "serif");
+  // ---------- Texto 3D fijo (canvas + textura reutilizable) ----------
+  // Ajustes visuales del texto
+  const pad = 36;
+  const fontPx = 56;
+  const lineH = 78;
+  const maxW = 1400;
 
-  // Ajustes del “escrito”
-  const TYPE_MIN_CPS = 18;  // caracteres/segundo (lento)
-  const TYPE_MAX_CPS = 34;  // caracteres/segundo (rápido)
-  const TYPE_JITTER  = 0.35; // variación random para que parezca “humano”
+  // Estado del “handwriting”
+  const typeSettings = {
+    minCps: 18,
+    maxCps: 34,
+    jitter: 0.35
+  };
 
   let textPlane = null;
-  let currentFullLines = [];
-  let currentVisibleText = "";
-  let typeCursor = 0;               // índice sobre texto completo
-  let typeNextTime = 0;             // cuándo revelar el siguiente char (segundos)
-  let typeTextAll = "";             // texto completo con saltos de línea
-  let lastVideoTime = 0;
+  let textCanvas = null;
+  let textCtx = null;
+  let textTexture = null;
 
-  function makeTextTextureFromString(text) {
-    // text incluye saltos de línea \n
-    const lines = String(text).split("\n");
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+  let typeAll = "";       // texto completo (con \n)
+  let typeCursor = 0;     // índice en typeAll
+  let typeNext = 0;       // temporizador para siguiente char (seg)
+  let lastT = 0;
 
-    const pad = 36;
-    const fontPx = 56;
-    const lineH = 78;
-    const maxW = 1400;
-
+  // Medimos el tamaño del canvas usando el TEXTO COMPLETO una sola vez por cue
+  function measureCanvasForLines(lines) {
+    const c = document.createElement("canvas");
+    const ctx = c.getContext("2d");
     ctx.font = `${fontPx}px ${fontName()}`;
+
+    const safe = Array.isArray(lines) ? lines : [String(lines)];
     const w = Math.min(
       maxW,
-      Math.max(...lines.map(l => ctx.measureText(l).width)) + pad*2
+      Math.max(...safe.map(l => ctx.measureText(l).width)) + pad*2
     );
-    const h = lines.length * lineH + pad*2;
+    const h = safe.length * lineH + pad*2;
 
-    canvas.width = Math.ceil(w);
-    canvas.height = Math.ceil(h);
-
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.font = `${fontPx}px ${fontName()}`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "rgba(255,255,255,0.96)";
-    ctx.shadowColor = "rgba(0,0,0,0.85)";
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 2;
-
-    let y = pad + lineH/2;
-    for (const line of lines) {
-      ctx.fillText(line, canvas.width/2, y);
-      y += lineH;
-    }
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.minFilter = THREE.LinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    tex.generateMipmaps = false;
-    return { tex, width: canvas.width, height: canvas.height };
+    return { w: Math.ceil(w), h: Math.ceil(h), safe };
   }
 
-  function setTextPlaneWithString(text) {
-    const { tex } = makeTextTextureFromString(text);
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent:true, depthWrite:false });
+  function ensureTextResourcesForCue(lines) {
+    const { w, h, safe } = measureCanvasForLines(lines);
 
-    const aspect = tex.image.width / tex.image.height;
-    const h = 0.30;
-    const w = h * aspect;
+    // (Re)crear canvas/textura solo cuando cambie el cue
+    textCanvas = document.createElement("canvas");
+    textCanvas.width = w;
+    textCanvas.height = h;
+
+    textCtx = textCanvas.getContext("2d");
+
+    textTexture = new THREE.CanvasTexture(textCanvas);
+    textTexture.minFilter = THREE.LinearFilter;
+    textTexture.magFilter = THREE.LinearFilter;
+    textTexture.generateMipmaps = false;
+
+    // Crear plano con tamaño fijo (según aspect del canvas completo)
+    const aspect = w / h;
+    const physicalH = 0.30;
+    const physicalW = physicalH * aspect;
+
+    const mat = new THREE.MeshBasicMaterial({
+      map: textTexture,
+      transparent: true,
+      depthWrite: false
+    });
 
     if (textPlane) {
-      textPlane.material.map.dispose();
       textPlane.material.dispose();
       textPlane.geometry.dispose();
       scene.remove(textPlane);
     }
 
-    textPlane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    textPlane = new THREE.Mesh(new THREE.PlaneGeometry(physicalW, physicalH), mat);
     textPlane.position.set(0, 1.23, -1.05); // fijo en el mundo
     scene.add(textPlane);
+
+    // Guardamos texto completo para el typewriter
+    typeAll = safe.join("\n");
+    typeCursor = 0;
+    typeNext = 0;
+
+    // Limpiar canvas inicial (vacío)
+    drawPartialText("");
   }
 
-  function startHandwriting(lines) {
-    currentFullLines = Array.isArray(lines) ? lines : [String(lines)];
-    typeTextAll = currentFullLines.join("\n");
-    typeCursor = 0;
-    currentVisibleText = "";
-    typeNextTime = 0; // se inicia en el siguiente frame
-    setTextPlaneWithString(""); // empieza vacío
+  function drawPartialText(partialText) {
+    if (!textCtx) return;
+
+    // Limpiar
+    textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+
+    // Estilo
+    textCtx.font = `${fontPx}px ${fontName()}`;
+    textCtx.textAlign = "center";
+    textCtx.textBaseline = "middle";
+    textCtx.fillStyle = "rgba(255,255,255,0.96)";
+    textCtx.shadowColor = "rgba(0,0,0,0.85)";
+    textCtx.shadowBlur = 20;
+    textCtx.shadowOffsetY = 2;
+
+    // Dibujar líneas (manteniendo las mismas posiciones siempre)
+    const lines = String(partialText).split("\n");
+    let y = pad + lineH/2;
+    for (let i = 0; i < lines.length; i++) {
+      textCtx.fillText(lines[i], textCanvas.width/2, y);
+      y += lineH;
+    }
+
+    // Actualizar textura sin cambiar tamaño/posición
+    textTexture.needsUpdate = true;
   }
 
   function randomCps() {
-    const base = TYPE_MIN_CPS + Math.random() * (TYPE_MAX_CPS - TYPE_MIN_CPS);
-    // jitter humano
-    const jitter = 1 + (Math.random() * 2 - 1) * TYPE_JITTER;
+    const base = typeSettings.minCps + Math.random() * (typeSettings.maxCps - typeSettings.minCps);
+    const jitter = 1 + (Math.random() * 2 - 1) * typeSettings.jitter;
     return Math.max(8, base * jitter);
   }
 
-  function stepHandwriting(dt) {
-    // dt: segundos desde el último frame (basado en video.currentTime)
-    if (!typeTextAll || typeCursor >= typeTextAll.length) return;
+  function stepTypewriter(dt) {
+    if (!typeAll || typeCursor >= typeAll.length) return;
 
-    // en vez de “cada frame”, revelamos chars según una cadencia
-    typeNextTime -= dt;
-    while (typeNextTime <= 0 && typeCursor < typeTextAll.length) {
+    typeNext -= dt;
+    while (typeNext <= 0 && typeCursor < typeAll.length) {
       typeCursor++;
+      const partial = typeAll.slice(0, typeCursor);
+      drawPartialText(partial);
 
-      // Revela también espacios “de golpe” para que no parezca teletipo robótico
-      while (typeCursor < typeTextAll.length && typeTextAll[typeCursor-1] === " ") {
-        // deja el espacio, pero avanza con muy poco delay
-        break;
-      }
-
-      currentVisibleText = typeTextAll.slice(0, typeCursor);
-      setTextPlaneWithString(currentVisibleText);
-
-      // próximo char: 1 / cps (cps aleatorio)
       const cps = randomCps();
-      typeNextTime += 1 / cps;
+      typeNext += 1 / cps;
     }
   }
 
-  /* ---------------------------
-     CUES + LOOP RESET
-  --------------------------- */
+  // ---------- Cues ----------
   const cues = [...CUES].sort((a,b)=>a.t-b.t);
   let nextCue = 0;
 
-  function resyncCues(t){
-    let idx=-1;
-    for(let i=0;i<cues.length;i++){ if(cues[i].t<=t) idx=i; else break; }
-    nextCue = idx+1;
-
-    if (idx >= 0) startHandwriting(cues[idx].text);
+  function resyncCues(t) {
+    let idx = -1;
+    for (let i=0; i<cues.length; i++) { if (cues[i].t <= t) idx = i; else break; }
+    nextCue = idx + 1;
+    if (idx >= 0) ensureTextResourcesForCue(cues[idx].text);
   }
 
-  // Si el vídeo hace loop, currentTime “salta” hacia atrás -> reiniciar cues
-  function handleLoopIfNeeded(t){
-    if (t + 0.02 < lastVideoTime) { // salto hacia atrás
+  // Reinicio cues al hacer loop (si el tiempo salta atrás)
+  let prevVideoTime = 0;
+  function handleLoopReset(t) {
+    if (t + 0.02 < prevVideoTime) { // saltó hacia atrás
       nextCue = 0;
-      startHandwriting([""]); // limpia
+      // limpia texto
+      if (textCtx && textCanvas && textTexture) drawPartialText("");
     }
-    lastVideoTime = t;
+    prevVideoTime = t;
   }
 
-  /* ---------------------------
-     Render loop
-  --------------------------- */
+  // ---------- Render loop ----------
   renderer.setAnimationLoop(() => {
     if (video.readyState >= 2) videoTex.needsUpdate = true;
 
     const t = video.currentTime;
-    handleLoopIfNeeded(t);
+    handleLoopReset(t);
 
-    // Dispara cues
+    // Disparar cues
     while (nextCue < cues.length && t >= cues[nextCue].t) {
-      startHandwriting(cues[nextCue].text);
+      ensureTextResourcesForCue(cues[nextCue].text);
       nextCue++;
     }
 
-    // Avanza escritura según delta de tiempo del vídeo
-    const dt = Math.max(0, t - (window.__prevT ?? t));
-    window.__prevT = t;
-    stepHandwriting(dt);
+    const dt = Math.max(0, t - lastT);
+    lastT = t;
+
+    stepTypewriter(dt);
 
     renderer.render(scene, camera);
   });
 
-  /* ---------------------------
-     Botones AR / VR
-  --------------------------- */
+  // ---------- Botones AR/VR ----------
   const btnStart = document.getElementById("start");
   const btnAR = document.getElementById("enterAR");
   const btnVR = document.getElementById("enterVR");
 
-  async function enterSession(mode){
+  async function enterSession(mode) {
     const session = await navigator.xr.requestSession(mode, {
       optionalFeatures:["local-floor","bounded-floor","hand-tracking"]
     });
@@ -306,6 +306,7 @@
       log("▶️ Iniciando vídeo (loop)...");
       video.load();
       await video.play();
+      lastT = video.currentTime;
       resyncCues(video.currentTime);
       btnAR.disabled = false;
       btnVR.disabled = false;
