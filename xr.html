@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XR Video</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+#overlay{
+  position:fixed;inset:0;
+  display:grid;place-items:center;
+  background:rgba(0,0,0,.85);
+  color:#fff;font-family:system-ui,Arial;
+  z-index:10;
+}
+button{
+  padding:14px 18px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.1);
+  color:#fff;
+  cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <button id="start">Cargar vídeo y entrar en VR</button>
+</div>
+
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { VRButton } from "https://unpkg.com/three@0.160.0/examples/jsm/webxr/VRButton.js";
+import { CUES, VIDEO_URL } from "./cues.js";
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 50);
+camera.position.set(0,1.6,2);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x222222,1.2));
+
+// Vídeo
+const video = document.createElement("video");
+video.src = VIDEO_URL;
+video.crossOrigin = "anonymous";
+video.playsInline = true;
+
+const videoTex = new THREE.VideoTexture(video);
+const screen = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.6,0.9),
+  new THREE.MeshBasicMaterial({ map: videoTex })
+);
+screen.position.set(0,1.6,-2.2);
+scene.add(screen);
+
+// Texto 3D
+let textPlane;
+function showText(lines){
+  const c = document.createElement("canvas");
+  const ctx = c.getContext("2d");
+  ctx.font="48px Arial";
+  const pad=30, lh=64;
+  c.width=1200; c.height=lines.length*lh+pad*2;
+  ctx.font="48px Arial";
+  ctx.fillStyle="white";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.shadowColor="black";
+  ctx.shadowBlur=20;
+  lines.forEach((l,i)=>{
+    ctx.fillText(l, c.width/2, pad+lh/2+i*lh);
+  });
+  const tex=new THREE.CanvasTexture(c);
+  const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true});
+  const h=.28, w=h*(c.width/c.height);
+  if(textPlane) scene.remove(textPlane);
+  textPlane=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);
+  textPlane.position.set(0,1.25,-1.6);
+  scene.add(textPlane);
+}
+
+let nextCue=0;
+renderer.setAnimationLoop(()=>{
+  if(!video.paused){
+    while(nextCue<CUES.length && video.currentTime>=CUES[nextCue].t){
+      showText(CUES[nextCue].text);
+      nextCue++;
+    }
+  }
+  if(textPlane) textPlane.quaternion.copy(camera.quaternion);
+  renderer.render(scene,camera);
+});
+
+document.getElementById("start").onclick=async()=>{
+  await video.play();
+  document.body.appendChild(VRButton.createButton(renderer));
+  document.getElementById("overlay").style.display="none";
+};
+</script>
+</body>
+</html>
