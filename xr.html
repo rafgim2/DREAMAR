@@ -3,16 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>XR Video (AR/MR) + Texto 3D</title>
+  <title>XR Video AR</title>
   <style>
     html,body{margin:0;height:100%;background:#000;overflow:hidden}
     #overlay{
-      position:fixed;inset:0;display:grid;place-items:center;
-      background:rgba(0,0,0,.85);color:#fff;font-family:system-ui,Arial;
+      position:fixed;inset:0;
+      display:grid;place-items:center;
+      background:rgba(0,0,0,.85);
+      color:#fff;font-family:system-ui,Arial;
       z-index:10;text-align:center;padding:24px;
     }
     .card{
-      max-width:860px;width:100%;
+      max-width:820px;width:100%;
       background:rgba(255,255,255,.06);
       border:1px solid rgba(255,255,255,.12);
       border-radius:18px;padding:20px;
@@ -23,22 +25,19 @@
       background:rgba(255,255,255,.1);
       color:#fff;cursor:pointer;margin:6px;
     }
-    .small{opacity:.75;font-size:14px;line-height:1.4;margin-top:10px;white-space:pre-wrap;text-align:left}
+    .small{opacity:.75;font-size:14px;line-height:1.4;margin-top:10px}
   </style>
 </head>
 <body>
 
 <div id="overlay">
   <div class="card">
-    <h2 style="margin:0 0 10px 0;">Passthrough + vídeo flotante + texto 3D</h2>
+    <h2 style="margin:0 0 10px 0;">Experiencia AR</h2>
     <p style="margin:0 0 14px 0;opacity:.9;">
-      1) Inicia el vídeo (muted). 2) Entra en AR (passthrough). Si AR no está disponible, entra en VR.
+      1) Inicia el vídeo · 2) Entra en AR (passthrough)
     </p>
-    <div>
-      <button id="start">1) Iniciar vídeo</button>
-      <button id="enterAR" disabled>2) Entrar en AR</button>
-      <button id="enterVR" disabled>Entrar en VR</button>
-    </div>
+    <button id="start">1) Iniciar vídeo</button>
+    <button id="enterAR" disabled>2) Entrar en AR</button>
     <div class="small" id="log"></div>
   </div>
 </div>
@@ -49,218 +48,155 @@
   import { CUES, VIDEO_URL } from "./cues.js";
 
   const logEl = document.getElementById("log");
-  const log = (m) => { logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + m; };
+  const log = m => logEl.textContent += (logEl.textContent ? "\n" : "") + m;
 
-  // Renderer transparente para passthrough
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  // ---------- Renderer (transparente para passthrough) ----------
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth,window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   scene.background = null;
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50);
-  camera.position.set(0, 1.6, 2.2);
+  const camera = new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,50);
+  camera.position.set(0,1.6,2);
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
+  scene.add(new THREE.HemisphereLight(0xffffff,0x222222,1.2));
 
-  // ---------- Vídeo (Quest friendly) ----------
+  // ---------- VIDEO ----------
   const video = document.createElement("video");
   video.src = VIDEO_URL;
   video.crossOrigin = "anonymous";
   video.muted = true;
-  video.setAttribute("muted", "");
-  video.volume = 0;
+  video.setAttribute("muted","");
   video.playsInline = true;
-  video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
+  video.setAttribute("playsinline","");
+  video.setAttribute("webkit-playsinline","");
   video.preload = "auto";
 
-  // Añadir al DOM (mejora compatibilidad)
-  video.style.position = "fixed";
-  video.style.left = "-9999px";
-  video.style.top = "-9999px";
-  video.width = 1; video.height = 1;
+  video.style.position="fixed";
+  video.style.left="-9999px";
   document.body.appendChild(video);
 
   const videoTex = new THREE.VideoTexture(video);
   videoTex.colorSpace = THREE.SRGBColorSpace;
 
-  // Pantalla flotante
   const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 0.9),
-    new THREE.MeshBasicMaterial({ map: videoTex, transparent: true })
+    new THREE.PlaneGeometry(1.6,0.9),
+    new THREE.MeshBasicMaterial({ map:videoTex, transparent:true })
   );
-  screen.position.set(0, 1.6, -2.2);
+  screen.position.set(0,1.6,-2.2);
   scene.add(screen);
 
-  // “Telón” oscuro detrás para concentrar la vista
-  const dimmer = new THREE.Mesh(
-    new THREE.PlaneGeometry(6, 4),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
-  );
-  dimmer.position.set(0, 1.6, -2.6);
-  scene.add(dimmer);
-
-  // ---------- TEXTO 3D REAL (Troika) + “cuerpo” por capas ----------
+  // ---------- TEXTO 3D REAL (Troika) ----------
   const textFront = new Text();
   textFront.text = "";
-  textFront.fontSize = 0.095;     // tamaño físico
+  textFront.fontSize = 0.095;
   textFront.lineHeight = 1.15;
-  textFront.maxWidth = 1.15;
+  textFront.maxWidth = 1.2;
   textFront.anchorX = "center";
   textFront.anchorY = "middle";
   textFront.color = 0xffffff;
-
-  // “borde” fino para legibilidad en passthrough
   textFront.outlineWidth = 0.004;
   textFront.outlineColor = 0x000000;
-  textFront.outlineOpacity = 0.55;
-
-  // Más cerca del usuario
-  textFront.position.set(0, 1.30, -1.05);
+  textFront.position.set(0,1.35,-1.0);
   scene.add(textFront);
 
-  // Capas traseras (simulan extrusión)
-  const EXTRUDE_LAYERS = 10;
-  const EXTRUDE_STEP = 0.0035;
+  // Extrusión (capas traseras)
+  const EXTRUDE_LAYERS = 8;
+  const EXTRUDE_STEP = 0.004;
   const extrudeMeshes = [];
 
-  for (let i = 1; i <= EXTRUDE_LAYERS; i++) {
+  for(let i=1;i<=EXTRUDE_LAYERS;i++){
     const t = new Text();
-    t.text = "";
+    t.text="";
     t.fontSize = textFront.fontSize;
     t.lineHeight = textFront.lineHeight;
     t.maxWidth = textFront.maxWidth;
     t.anchorX = textFront.anchorX;
     t.anchorY = textFront.anchorY;
-
-    t.color = 0x1a1a1a;      // “cuerpo” oscuro
-    t.outlineWidth = 0;      // solo el frontal lleva outline
-
+    t.color = 0x1a1a1a;
     t.position.set(
       textFront.position.x,
       textFront.position.y,
-      textFront.position.z - i * EXTRUDE_STEP
+      textFront.position.z - i*EXTRUDE_STEP
     );
-
     scene.add(t);
     extrudeMeshes.push(t);
   }
 
-  async function setText3D(lines) {
+  async function setText3D(lines){
     const content = Array.isArray(lines) ? lines.join("\n") : String(lines);
-
     textFront.text = content;
     await textFront.sync();
-
-    for (const t of extrudeMeshes) {
+    for(const t of extrudeMeshes){
       t.text = content;
       await t.sync();
     }
   }
 
-  // ---------- Cues ----------
+  // ---------- CUES ----------
   const cues = [...CUES].sort((a,b)=>a.t-b.t);
   let nextCue = 0;
 
-  async function resyncCues(t){
+  function resyncCues(t){
     let idx=-1;
-    for(let i=0;i<cues.length;i++){ if(cues[i].t<=t) idx=i; else break; }
+    for(let i=0;i<cues.length;i++){
+      if(cues[i].t<=t) idx=i; else break;
+    }
     nextCue = idx+1;
-    if(idx>=0) await setText3D(cues[idx].text);
+    if(idx>=0) setText3D(cues[idx].text);
   }
 
-  // ---------- Loop ----------
-  renderer.setAnimationLoop(() => {
-    if (video.readyState >= 2) videoTex.needsUpdate = true;
+  // ---------- LOOP ----------
+  renderer.setAnimationLoop(()=>{
+    if(video.readyState>=2) videoTex.needsUpdate=true;
 
-    if (!video.paused && !video.ended) {
+    if(!video.paused && !video.ended){
       const t = video.currentTime;
-      while (nextCue < cues.length && t >= cues[nextCue].t) {
-        // Nota: no esperamos aquí para no bloquear el frame
+      while(nextCue<cues.length && t>=cues[nextCue].t){
         setText3D(cues[nextCue].text);
         nextCue++;
       }
     }
 
-    // Billboard: que mire al usuario
     textFront.quaternion.copy(camera.quaternion);
-    for (const t of extrudeMeshes) t.quaternion.copy(camera.quaternion);
+    for(const t of extrudeMeshes) t.quaternion.copy(camera.quaternion);
 
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
   });
 
-  window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // ---------- Sesiones AR/VR ----------
-  async function enterSession(mode) {
-    if (!navigator.xr) throw new Error("WebXR no disponible en este navegador.");
-
-    const optionalFeatures = [
-      "local-floor",
-      "bounded-floor",
-      "hand-tracking",
-      "layers",
-      "anchors",
-      "hit-test"
-    ];
-
-    const session = await navigator.xr.requestSession(mode, { optionalFeatures });
-    renderer.xr.setSession(session);
-    log(`✅ Sesión iniciada: ${mode}`);
-    session.addEventListener("end", () => log(`ℹ️ Sesión finalizada: ${mode}`));
-  }
-
-  // ---------- UI ----------
+  // ---------- BOTONES ----------
   const btnStart = document.getElementById("start");
   const btnAR = document.getElementById("enterAR");
-  const btnVR = document.getElementById("enterVR");
 
-  btnStart.addEventListener("click", async () => {
-    try {
-      log("Iniciando vídeo (muted)...");
+  btnStart.onclick = async ()=>{
+    try{
       video.load();
       await video.play();
-      await resyncCues(video.currentTime);
-      log("✅ Vídeo OK. Ya puedes entrar en AR o VR.");
-
-      btnAR.disabled = false;
-      btnVR.disabled = false;
-    } catch (e) {
-      log(`❌ Error vídeo: ${e?.name || "Error"}: ${e?.message || e}`);
+      resyncCues(video.currentTime);
+      btnAR.disabled=false;
+      log("Vídeo iniciado.");
+    }catch(e){
+      log("Error vídeo: "+e.message);
     }
-  });
+  };
 
-  btnAR.addEventListener("click", async () => {
-    try {
-      const ok = await navigator.xr?.isSessionSupported?.("immersive-ar");
-      log(`isSessionSupported(immersive-ar): ${ok}`);
-      if (!ok) throw new Error("immersive-ar no soportado en este Quest Browser.");
-      await enterSession("immersive-ar");
-      document.getElementById("overlay").style.display = "none";
-    } catch (e) {
-      log(`❌ AR no disponible: ${e?.message || e}\nPrueba VR (fallback).`);
+  btnAR.onclick = async ()=>{
+    try{
+      const ok = await navigator.xr.isSessionSupported("immersive-ar");
+      if(!ok) throw new Error("immersive-ar no soportado");
+      const session = await navigator.xr.requestSession("immersive-ar",{ optionalFeatures:["local-floor"] });
+      renderer.xr.setSession(session);
+      document.getElementById("overlay").style.display="none";
+      log("AR iniciado.");
+    }catch(e){
+      log("AR error: "+e.message);
     }
-  });
+  };
 
-  btnVR.addEventListener("click", async () => {
-    try {
-      const ok = await navigator.xr?.isSessionSupported?.("immersive-vr");
-      log(`isSessionSupported(immersive-vr): ${ok}`);
-      if (!ok) throw new Error("immersive-vr no soportado (raro).");
-      await enterSession("immersive-vr");
-      document.getElementById("overlay").style.display = "none";
-    } catch (e) {
-      log(`❌ VR no disponible: ${e?.message || e}`);
-    }
-  });
 </script>
 </body>
 </html>
