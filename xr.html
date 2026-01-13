@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XR AR Video + MIDI Háptica</title>
+<title>XR AR Video + MIDI Háptica (2 manos)</title>
 
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,Arial}
@@ -30,7 +30,7 @@
 <div id="overlay">
   <div class="card">
     <h2 style="margin:0 0 10px 0;">Experiencia AR</h2>
-    <p style="margin:0 0 14px 0;opacity:.9;">Vídeo + texto + vibración sutil (mando derecho) desde MIDI</p>
+    <p style="margin:0 0 14px 0;opacity:.9;">Vídeo + texto + vibración 2 manos (MIDI)</p>
 
     <button id="start">▶ Iniciar vídeo</button>
     <button id="enterAR" disabled>Entrar en AR</button>
@@ -49,12 +49,13 @@ const logEl = document.getElementById("log");
 const log = (m) => { logEl.textContent += (logEl.textContent ? "\n" : "") + m; };
 
 // -------------------- CONFIG MIDI/HÁPTICA --------------------
-const MIDI_URL = "./dream14.mid";
+const MIDI_RIGHT_URL = "./dream14.mid";     // derecha
+const MIDI_LEFT_URL  = "./dream14iz.mid";   // izquierda
 
-// Offset inicial por intro del vídeo
-let MIDI_OFFSET = 14.5; // ⬅️ ajusta luego fino
+// ✅ tus ajustes actuales
+let MIDI_OFFSET = 14.5;
 
-// Vibración sutil
+// ✅ tu intensidad
 const HAPTIC_INTENSITY = 0.35; // 0..1
 const HAPTIC_DURATION_MS = 18; // ms
 const HAPTIC_WINDOW = 0.020;   // 20ms tolerancia
@@ -94,28 +95,20 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.2));
 // -------------------- VIDEO + AUDIO --------------------
 const video = document.createElement("video");
 video.src = VIDEO_URL;
-video.crossOrigin = "anonymous";  // clave para VideoTexture + CORS
+video.crossOrigin = "anonymous";
 video.loop = true;
 video.preload = "auto";
 video.playsInline = true;
 video.setAttribute("playsinline","");
 video.setAttribute("webkit-playsinline","");
-
-// Audio (se habilita al darle al botón Start)
 video.muted = false;
 video.volume = 1.0;
 
-// DOM hidden (Quest-friendly)
 video.style.position = "fixed";
 video.style.left = "-9999px";
 video.style.top = "-9999px";
 video.width = 1; video.height = 1;
 document.body.appendChild(video);
-
-video.addEventListener("error", () => {
-  const e = video.error;
-  log("❌ Error video: " + (e ? (e.code + " " + e.message) : "desconocido"));
-});
 
 const videoTex = new THREE.VideoTexture(video);
 videoTex.colorSpace = THREE.SRGBColorSpace;
@@ -135,7 +128,10 @@ let fullLines = [], fullWidths = [], fullText = "";
 let cursor = 0, nextT = 0;
 let prevVideoT = 0;
 
-// velocidad del “escrito” (más lento -> baja los números)
+// ✅ tu altura deseada
+const TEXT_Y = 1.65;
+
+// velocidad del “escrito”
 const TYPE_CPS_MIN = 8;
 const TYPE_CPS_MAX = 14;
 
@@ -172,7 +168,7 @@ function setupText(lines){
     new THREE.PlaneGeometry(physicalW, physicalH),
     new THREE.MeshBasicMaterial({ map: texture, transparent:true, depthWrite:false })
   );
-  plane.position.set(0, 1.65, -1.05);
+  plane.position.set(0, TEXT_Y, -1.05);
   scene.add(plane);
 
   fullText = fullLines.join("\n");
@@ -223,7 +219,6 @@ function randomCps(){
 function stepType(dt){
   if (!fullText || cursor >= fullText.length) return;
   nextT -= dt;
-
   while (nextT <= 0 && cursor < fullText.length){
     cursor++;
     draw(cursor);
@@ -235,104 +230,127 @@ function stepType(dt){
 const cues = [...CUES].sort((a,b)=>a.t-b.t);
 let nextCue = 0;
 
-// -------------------- MIDI + HÁPTICA --------------------
+// -------------------- MIDI LIB + CARGA --------------------
 let MidiLib = null;
-let midiNoteTimes = [];
-let nextMidiIdx = 0;
-let rightHaptic = null;
-
-let lastVideoTimeForLoop = 0;
-let lastPulseAt = -999;
-
 async function loadMidiLib(){
   if (MidiLib) return;
-  log("⏳ Cargando librería MIDI (ESM)...");
+  log("⏳ Cargando librería MIDI…");
   MidiLib = await import("https://esm.sh/@tonejs/midi@2.0.28?bundle");
   log("✅ Librería MIDI lista");
 }
 
-async function loadMidiNotes(){
-  if (midiNoteTimes.length > 0) return;
-
+async function loadMidiTimes(url){
   await loadMidiLib();
   const { Midi } = MidiLib;
 
-  log("⏳ Cargando dream14.mid…");
-  const res = await fetch(MIDI_URL);
-  if (!res.ok) throw new Error("No se pudo cargar " + MIDI_URL);
-
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("No se pudo cargar " + url);
   const ab = await res.arrayBuffer();
   const midi = new Midi(ab);
 
   const times = [];
   for (const track of midi.tracks){
-    for (const n of track.notes){
-      times.push(n.time); // segundos
-    }
+    for (const n of track.notes) times.push(n.time);
   }
   times.sort((a,b)=>a-b);
-
-  midiNoteTimes = times;
-  nextMidiIdx = 0;
-  log("✅ MIDI cargado. Notas: " + midiNoteTimes.length);
+  return times;
 }
 
-function updateRightHaptic(session){
+// -------------------- HÁPTICA (2 manos) --------------------
+let rightHaptic = null;
+let leftHaptic = null;
+
+let rightTimes = [];
+let leftTimes  = [];
+let rightIdx = 0;
+let leftIdx  = 0;
+
+let lastVideoTimeForLoop = 0;
+let lastPulseRightAt = -999;
+let lastPulseLeftAt  = -999;
+
+function updateHaptics(session){
   rightHaptic = null;
+  leftHaptic = null;
+
   for (const src of session.inputSources){
-    if (src.handedness === "right" && src.gamepad){
-      const acts = src.gamepad.hapticActuators;
-      if (acts && acts.length > 0){
-        rightHaptic = acts[0];
-        break;
-      }
-    }
+    if (!src.gamepad) continue;
+    const acts = src.gamepad.hapticActuators;
+    if (!acts || acts.length === 0) continue;
+
+    if (src.handedness === "right") rightHaptic = acts[0];
+    if (src.handedness === "left")  leftHaptic  = acts[0];
   }
-  log(rightHaptic ? "✅ Háptica derecha disponible" : "⚠️ No detecto háptica derecha (¿mandos conectados?)");
+
+  log(rightHaptic ? "✅ Háptica derecha OK" : "⚠️ No háptica derecha");
+  log(leftHaptic  ? "✅ Háptica izquierda OK" : "⚠️ No háptica izquierda");
 }
 
-function pulseRight(){
-  if (!rightHaptic) return;
-  try{ rightHaptic.pulse(HAPTIC_INTENSITY, HAPTIC_DURATION_MS); }catch{}
+function pulse(actuator){
+  if (!actuator) return;
+  try{ actuator.pulse(HAPTIC_INTENSITY, HAPTIC_DURATION_MS); }catch{}
 }
 
-function resyncMidiIndex(midiTime){
-  let lo = 0, hi = midiNoteTimes.length;
+function resyncIndex(times, midiTime){
+  let lo = 0, hi = times.length;
   while (lo < hi){
     const mid = (lo + hi) >> 1;
-    if (midiNoteTimes[mid] <= midiTime) lo = mid + 1;
+    if (times[mid] <= midiTime) lo = mid + 1;
     else hi = mid;
   }
-  nextMidiIdx = lo;
+  return lo;
+}
+
+function tickHand(times, which, videoTime, midiTime){
+  if (times.length === 0) return;
+
+  if (which === "R"){
+    while (rightIdx < times.length){
+      const nt = times[rightIdx];
+      const diff = nt - midiTime;
+      if (diff <= HAPTIC_WINDOW){
+        if (videoTime - lastPulseRightAt > MIN_PULSE_GAP){
+          pulse(rightHaptic);
+          lastPulseRightAt = videoTime;
+        }
+        rightIdx++;
+        continue;
+      }
+      break;
+    }
+  } else {
+    while (leftIdx < times.length){
+      const nt = times[leftIdx];
+      const diff = nt - midiTime;
+      if (diff <= HAPTIC_WINDOW){
+        if (videoTime - lastPulseLeftAt > MIN_PULSE_GAP){
+          pulse(leftHaptic);
+          lastPulseLeftAt = videoTime;
+        }
+        leftIdx++;
+        continue;
+      }
+      break;
+    }
+  }
 }
 
 function tickHaptics(videoTime){
-  if (midiNoteTimes.length === 0) return;
+  if (rightTimes.length === 0 && leftTimes.length === 0) return;
 
   // loop del vídeo
   if (videoTime + 0.05 < lastVideoTimeForLoop){
     const mt = Math.max(0, videoTime - MIDI_OFFSET);
-    resyncMidiIndex(mt);
+    rightIdx = resyncIndex(rightTimes, mt);
+    leftIdx  = resyncIndex(leftTimes,  mt);
   }
   lastVideoTimeForLoop = videoTime;
 
   const midiTime = videoTime - MIDI_OFFSET;
   if (midiTime < 0) return;
 
-  while (nextMidiIdx < midiNoteTimes.length){
-    const nt = midiNoteTimes[nextMidiIdx];
-    const diff = nt - midiTime;
-
-    if (diff <= HAPTIC_WINDOW){
-      if (videoTime - lastPulseAt > MIN_PULSE_GAP){
-        pulseRight();
-        lastPulseAt = videoTime;
-      }
-      nextMidiIdx++;
-      continue;
-    }
-    break;
-  }
+  tickHand(rightTimes, "R", videoTime, midiTime);
+  tickHand(leftTimes,  "L", videoTime, midiTime);
 }
 
 // -------------------- RENDER LOOP --------------------
@@ -341,18 +359,15 @@ renderer.setAnimationLoop(()=>{
 
   const t = video.currentTime;
 
-  // cues texto
   while (nextCue < cues.length && t >= cues[nextCue].t){
     setupText(cues[nextCue].text);
     nextCue++;
   }
 
-  // escritura texto
   const dt = Math.max(0, t - prevVideoT);
   prevVideoT = t;
   stepType(dt);
 
-  // háptica (solo si MIDI cargado)
   tickHaptics(t);
 
   renderer.render(scene, camera);
@@ -369,8 +384,8 @@ async function enter(mode){
   });
   renderer.xr.setSession(s);
 
-  updateRightHaptic(s);
-  s.addEventListener("inputsourceschange", () => updateRightHaptic(s));
+  updateHaptics(s);
+  s.addEventListener("inputsourceschange", () => updateHaptics(s));
 
   overlay.style.display = "none";
 }
@@ -379,26 +394,36 @@ btnStart.onclick = async () => {
   try {
     loadPristinaFontNonBlocking();
 
-    // 1) Arranca vídeo con gesto (audio permitido)
+    // 1) vídeo
     video.muted = false;
     video.volume = 1.0;
     await video.play();
     log("▶ Vídeo iniciado (con sonido)");
 
-    // 2) Carga MIDI (si falla, no rompe vídeo)
+    // 2) MIDI (2 archivos)
     try{
-      await loadMidiNotes();
+      log("⏳ Cargando MIDI derecha...");
+      rightTimes = await loadMidiTimes(MIDI_RIGHT_URL);
+      log("✅ MIDI derecha OK (" + rightTimes.length + " notas)");
+
+      log("⏳ Cargando MIDI izquierda...");
+      leftTimes = await loadMidiTimes(MIDI_LEFT_URL);
+      log("✅ MIDI izquierda OK (" + leftTimes.length + " notas)");
+
       const mt = Math.max(0, video.currentTime - MIDI_OFFSET);
-      resyncMidiIndex(mt);
-      log("🟣 MIDI listo. Offset = " + MIDI_OFFSET + "s");
+      rightIdx = resyncIndex(rightTimes, mt);
+      leftIdx  = resyncIndex(leftTimes,  mt);
+
+      log("🟣 Háptica 2 manos lista. Offset=" + MIDI_OFFSET + "s");
     }catch(e){
       log("⚠️ MIDI/háptica no disponibles: " + (e?.message || e));
     }
 
     btnAR.disabled = false;
     btnVR.disabled = false;
+
   } catch (e) {
-    log("❌ No se pudo iniciar el vídeo: " + (e?.message || e));
+    log("❌ No se pudo iniciar: " + (e?.message || e));
   }
 };
 
@@ -413,11 +438,8 @@ btnAR.onclick = async () => {
 };
 
 btnVR.onclick = async () => {
-  try{
-    await enter("immersive-vr");
-  }catch(e){
-    log("❌ VR: " + (e?.message || e));
-  }
+  try{ await enter("immersive-vr"); }
+  catch(e){ log("❌ VR: " + (e?.message || e)); }
 };
 
 window.addEventListener("resize", ()=>{
@@ -430,5 +452,3 @@ log("✅ App cargada. Pulsa “Iniciar vídeo”.");
 </script>
 </body>
 </html>
-
-
