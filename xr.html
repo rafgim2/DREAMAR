@@ -147,7 +147,7 @@ function setupText(lines){
     new THREE.PlaneGeometry(0.3*aspect,0.3),
     new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false})
   );
-  plane.position.set(0,1.55,-1.05);
+  plane.position.set(0,1.65,-1.05);
   scene.add(plane);
 
   fullText=fullLines.join("\n");
@@ -249,6 +249,7 @@ window.addEventListener("resize",()=>{
 </script>
 </body>
 </html>
+
 
 
 
