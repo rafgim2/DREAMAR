@@ -52,10 +52,10 @@ const log = (m) => { logEl.textContent += (logEl.textContent ? "\n" : "") + m; }
 const MIDI_URL = "./dream14.mid";
 
 // Offset inicial por intro del vídeo
-let MIDI_OFFSET = 15.0; // ⬅️ ajusta luego fino
+let MIDI_OFFSET = 14.5; // ⬅️ ajusta luego fino
 
 // Vibración sutil
-const HAPTIC_INTENSITY = 0.25; // 0..1
+const HAPTIC_INTENSITY = 0.35; // 0..1
 const HAPTIC_DURATION_MS = 18; // ms
 const HAPTIC_WINDOW = 0.020;   // 20ms tolerancia
 const MIN_PULSE_GAP = 0.010;   // evita spam si notas muy juntas
@@ -430,4 +430,5 @@ log("✅ App cargada. Pulsa “Iniciar vídeo”.");
 </script>
 </body>
 </html>
+
 
