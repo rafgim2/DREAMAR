@@ -397,7 +397,7 @@ function setupText(lines, type = "text"){
   const fullWidths = fullLines.map(l => mctx.measureText(l).width);
 
   const w = Math.ceil(Math.max(...fullWidths) + pad*2);
-  const h = Math.ceil(fullLines.length * activeLineH + pad*2);
+  const h = Math.ceil(fullLines.length * activeLineH + pad*2 + (isTitle ? 40 : 0));
 
   const canvas = document.createElement("canvas");
   canvas.width = w; canvas.height = h;
@@ -1657,6 +1657,7 @@ log("✅ App cargada. Pulsa “Iniciar vídeo”.");
 </script>
 </body>
 </html>
+
 
 
 
