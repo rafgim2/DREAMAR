@@ -6,8 +6,8 @@ export const CUES = [
   // ✅ TÍTULO (ajusta el tiempo a cuando quieras que aparezca)
   { t: 2.0, type: "title", text: ["Broken note"] },
 
-// 8 grupos de versos con segundos exactos
-export const CUES = [
+  // ✅ TEXTO NORMAL
+ 
   { t: 10.0,  text: ["Incompleto y roto, con aristas desiguales que parecen no cuadrar..."] },
   { t: 25.0, text: ["desapercibido, invisible, incomprendido en su complejidad..."] },
   { t: 40.0, text: ["Incompleto y roto, pero destinado a encajar en algún lugar..."] },
@@ -18,6 +18,7 @@ export const CUES = [
   { t: 1115.0, text: ["Formando parte de un todo, aunque sus grietas griten su fragilidad..."] },
   { t: 130.0, text: ["Incompleto y roto, pero un enigma y un susurro", "para los que se atrevan a escuchar..."] },
 ];
+
 
 
 
