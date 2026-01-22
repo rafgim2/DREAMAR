@@ -544,7 +544,8 @@ function drawObj(obj, chars){
     ctx.save();
     ctx.beginPath();
    ctx.rect(left, y - activeLineH/2, vw, activeLineH * (isTitle ? 1.65 : 1.0));
-    ctx.clip();
+    if (!isTitle) ctx.clip();
+
 
     drawLine(full, cx, y);
 
@@ -1657,6 +1658,7 @@ log("✅ App cargada. Pulsa “Iniciar vídeo”.");
 </script>
 </body>
 </html>
+
 
 
 
