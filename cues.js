@@ -8,7 +8,7 @@ export const CUES = [
 
   // ✅ TEXTO NORMAL
 
- { t: 10.0, type: "text", text: ["Incompleto y roto,", "con aristas desiguales que parecen no cuadrar…"] },
+ { t: 12.0, type: "text", text: ["Incompleto y roto,", "con aristas desiguales que parecen no cuadrar…"] },
   { t: 25.0, type: "text", text: ["desapercibido, invisible,", "incomprendido en su complejidad…"] },
   { t: 40.0, type: "text", text: ["Incompleto y roto,", "pero destinado a encajar en algún lugar…"] },
   { t: 55.0, type: "text", text: ["A veces distante,", "anhelando la perfección de la inmensidad…"] },
@@ -17,6 +17,7 @@ export const CUES = [
   { t: 115.0, type: "text", text: ["Formando parte de un todo,", "aunque sus grietas griten su fragilidad…"] },
   { t: 130.0, type: "text", text: ["Incompleto y roto, pero un enigma", "y un susurro para los que se atrevan a escuchar…"] },
 ];
+
 
 
 
