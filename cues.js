@@ -4,7 +4,7 @@ export const VIDEO_URL = "https://pub-aa6ee859836d478ca4ac85eb9f71f0c3.r2.dev/br
 // Cues (incluye título con type:"title")
 export const CUES = [
   // ✅ TÍTULO (ajusta el tiempo a cuando quieras que aparezca)
-  { t: 2.0, type: "title", text: ["Dream nº14"] },
+  { t: 2.0, type: "title", text: ["Broken note"] },
 
 // 8 grupos de versos con segundos exactos
 export const CUES = [
@@ -18,6 +18,7 @@ export const CUES = [
   { t: 1115.0, text: ["Formando parte de un todo, aunque sus grietas griten su fragilidad..."] },
   { t: 130.0, text: ["Incompleto y roto, pero un enigma y un susurro", "para los que se atrevan a escuchar..."] },
 ];
+
 
 
 
