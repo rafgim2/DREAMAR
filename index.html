@@ -18,10 +18,10 @@
     max-width:700px;
     width:90%;
 
-    border:2px solid rgba(80, 160, 255, 0.85);
+    border:2px solid rgba(120, 180, 255, 0.85);
     box-shadow:
-      0 0 18px rgba(80, 140, 255, 0.35),
-      inset 0 0 12px rgba(120, 180, 255, 0.18);
+      0 0 18px rgba(80, 140, 255, 0.45),
+      inset 0 0 12px rgba(160, 200, 255, 0.25);
   }
   button{
     padding:14px 18px;border-radius:14px;
@@ -46,7 +46,7 @@
 
     <div class="small" id="log"></div>
       <div style="margin-top:18px; text-align:right; font-size:14px; opacity:.75;">
-      <a href="https://www.youtube.com/@rafgim" target="_blank" style="color:#9fd4ff; text-decoration:none;">
+      <a href="https://www.youtube.com/@rafgim" target="_blank" style="color:#ffd27a; text-decoration:none;">
         © By Rafael Gimeno
       </a>
     </div>
@@ -250,9 +250,9 @@ function drawGradient(phase, energy){
 
   const grd = gctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
   const a = 0.92 + energy * 0.06;
-  grd.addColorStop(0.00, `rgba(170, 220, 255, ${a})`);
-  grd.addColorStop(0.50, `rgba(90, 170, 255, ${a})`);
-  grd.addColorStop(1.00, `rgba(30, 90, 160, ${a})`);
+  grd.addColorStop(0.00, `rgba(120, 170, 255, ${a})`);
+  grd.addColorStop(0.50, `rgba(80, 140, 255, ${a})`);
+  grd.addColorStop(1.00, `rgba(20, 60, 140, ${a})`);
 
   gctx.fillStyle = grd;
   gctx.fillRect(0,0,512,512);
@@ -314,10 +314,10 @@ function makeAnimatedTitleGradient(ctx, phase, w, h){
   const a3 = clamp(p + band*0.6, 0, 1);
   const a4 = clamp(p + band*2.0, 0, 1);
 
-  const brown  = [30, 90, 160];
-  const orange = [90, 170, 255];
-  const gold   = [170, 220, 255];
-  const hot2   = [220, 245, 255];
+  const brown  = [20, 60, 140];
+  const orange = [80, 140, 255];
+  const gold   = [140, 200, 255];
+  const hot2   = [220, 240, 255];
 
   g.addColorStop(0.00, rgb(brown[0],  brown[1],  brown[2],  0.95));
   g.addColorStop(a0,   rgb(brown[0],  brown[1],  brown[2],  0.95));
@@ -369,8 +369,8 @@ function makeGlowTexture(){
   cx.clearRect(0,0,256,256);
 
   const g = cx.createRadialGradient(128,128,0,128,128,110);
-  g.addColorStop(0.0, "rgba(140, 200, 255, 0.60)");
-  g.addColorStop(0.45,"rgba(90, 170, 255, 0.22)");
+  g.addColorStop(0.0, "rgba(120, 180, 255, 0.60)");
+  g.addColorStop(0.45,"rgba(80, 140, 255, 0.22)");
   g.addColorStop(1.0, "rgba(0, 0, 0, 0)");
 
   cx.fillStyle = g;
@@ -510,7 +510,7 @@ function drawObj(obj, chars){
 
     ctx.save();
     ctx.lineWidth = Math.max(2, activeFontPx * 0.06);
-    ctx.strokeStyle = "rgba(120, 55, 20, 0.25)";
+    ctx.strokeStyle = "rgba(40, 90, 180, 0.30)";
     ctx.shadowBlur = 0;
     ctx.strokeText(str, x, y);
     ctx.restore();
@@ -525,8 +525,8 @@ function drawObj(obj, chars){
 
     ctx.save();
     ctx.globalAlpha = 0.06;
-    ctx.fillStyle = "rgba(255,245,235,1.0)";
-    ctx.shadowColor = "rgba(255,235,210,0.9)";
+    ctx.fillStyle = "rgba(230,245,255,1.0)";
+    ctx.shadowColor = "rgba(180,220,255,0.9)";
     ctx.shadowBlur = 14 * glowBoost;
     ctx.fillText(str, x, y);
     ctx.restore();
@@ -989,9 +989,9 @@ function spawnParticlesFrom(worldPos, warm, isRightSide){
     targetZ[i] = t.z;
 
     const b = 0.75 + warm*0.25;
-    colors[i*3+0] = (0.45 + 0.15*Math.random()) * b;
-    colors[i*3+1] = (0.65 + 0.25*Math.random()) * b;
-    colors[i*3+2] = (0.95 + 0.05*Math.random()) * b;
+    colors[i*3+0] = 1.0 * b;
+    colors[i*3+1] = (0.55 + 0.35*Math.random()) * b;
+    colors[i*3+2] = (0.12 + 0.14*Math.random()) * b;
 
     alphas[i] = 1.0;
   }
@@ -1044,9 +1044,9 @@ function spawnTitleParticlesAt(worldPos, warm){
     velocity[i*3+2] = vz;
 
     const b = 0.75 + warm*0.25;
-    colors[i*3+0] = (0.45 + 0.15*Math.random()) * b;
-    colors[i*3+1] = (0.65 + 0.20*Math.random()) * b;
-    colors[i*3+2] = (0.95 + 0.05*Math.random()) * b;
+    colors[i*3+0] = 1.0 * b;
+    colors[i*3+1] = (0.55 + 0.20*Math.random()) * b;
+    colors[i*3+2] = (0.08 + 0.10*Math.random()) * b;
 
     alphas[i] = 1.0;
   }
@@ -1260,9 +1260,9 @@ function spawnCometTrail(worldPos, dt){
     targetZ[i] = tmpViewerEnd.z;
 
     const b = 0.75 + COMET_TRAIL_WARM*0.25;
-    colors[i*3+0] = (0.45 + 0.15*Math.random()) * b;
-    colors[i*3+1] = (0.70 + 0.20*Math.random()) * b;
-    colors[i*3+2] = (0.95 + 0.05*Math.random()) * b;
+    colors[i*3+0] = 1.0 * b;
+    colors[i*3+1] = (0.68 + 0.22*Math.random()) * b;
+    colors[i*3+2] = (0.20 + 0.20*Math.random()) * b;
 
     alphas[i] = 1.0;
   }
