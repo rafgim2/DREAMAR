@@ -8,18 +8,16 @@ export const CUES = [
 
   // ✅ TEXTO NORMAL
  
-  { t: 10.0,  text: ["Incompleto y roto, con aristas desiguales que parecen no cuadrar..."] },
-  { t: 25.0, text: ["desapercibido, invisible, incomprendido en su complejidad..."] },
-  { t: 40.0, text: ["Incompleto y roto, pero destinado a encajar en algún lugar..."] },
-  { t: 55.0, text: ["A veces distante, anhelando la perfección de la inmensidad..."] },
-  { t: 70.0, text: ["Incompleto y roto, como una sombra que no se puede ocultar..."] },
-  { t: 85.0, text: ["Con cicatrices, pero también historias que nadie más puede contar..."] },
-  { t: 100.0, text: ["Incompleto y roto, pero en perfecta armonía con lo demás..."] },
-  { t: 1115.0, text: ["Formando parte de un todo, aunque sus grietas griten su fragilidad..."] },
-  { t: 130.0, text: ["Incompleto y roto, pero un enigma y un susurro", "para los que se atrevan a escuchar..."] },
+  { t: 10.0, type: "text",  text: ["Incompleto y roto, con aristas desiguales que parecen no cuadrar..."] },
+  { t: 25.0, type: "text", text: ["desapercibido, invisible, incomprendido en su complejidad..."] },
+  { t: 40.0, type: "text", text: ["Incompleto y roto, pero destinado a encajar en algún lugar..."] },
+  { t: 55.0, type: "text", text: ["A veces distante, anhelando la perfección de la inmensidad..."] },
+  { t: 70.0, type: "text", text: ["Incompleto y roto, como una sombra que no se puede ocultar..."] },
+  { t: 85.0, type: "text", text: ["Con cicatrices, pero también historias que nadie más puede contar..."] },
+  { t: 100.0, type: "text", text: ["Incompleto y roto, pero en perfecta armonía con lo demás..."] },
+  { t: 1115.0, type: "text", text: ["Formando parte de un todo, aunque sus grietas griten su fragilidad..."] },
+  { t: 130.0, type: "text", text: ["Incompleto y roto, pero un enigma y un susurro", "para los que se atrevan a escuchar..."] },
 ];
-
-
 
 
 
