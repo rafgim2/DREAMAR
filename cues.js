@@ -1,17 +1,19 @@
 // URL del vídeo (GitHub Pages, mismo directorio)
-export const VIDEO_URL = "https://pub-aa6ee859836d478ca4ac85eb9f71f0c3.r2.dev/dreamurl6.mp4";
+export const VIDEO_URL = "https://pub-aa6ee859836d478ca4ac85eb9f71f0c3.r2.dev/brokennotear.mp4";
 
 // 8 grupos de versos con segundos exactos
 export const CUES = [
-  { t: 23.0,  text: ["El día se despide sin hacer ruido,", " como si supiera que aún no es el final… "] },
-  { t: 37.0, text: ["La luz cae despacio sobre lo que fui,", "y nada duele pero todo pesa…"] },
-  { t: 51.0, text: ["Hay silencios que no piden respuesta,", "solo un lugar donde quedarse un momento…"] },
-  { t: 65.0, text: ["El tiempo avanza sin mirarme,", "yo sigo aquí aprendiendo a no correr…"] },
-  { t: 80.0, text: ["Algo se rompe en silencio,", "y en ese gesto nace una verdad…"] },
-  { t: 100.0, text: ["No todo lo perdido se va del todo,", "algunas ausencias aprenden a quedarse…"] },
-  { t: 125.0, text: ["Cuando la noche lo cubre todo,", "ya no busco luz busco sentido…"] },
-  { t: 152.0, text: ["Porque aceptar la oscuridad no es rendirse,", "es comprender que también forma parte de mí…"] },
+  { t: 10.0,  text: ["Incompleto y roto, con aristas desiguales que parecen no cuadrar..."] },
+  { t: 25.0, text: ["desapercibido, invisible, incomprendido en su complejidad..."] },
+  { t: 40.0, text: ["Incompleto y roto, pero destinado a encajar en algún lugar..."] },
+  { t: 55.0, text: ["A veces distante, anhelando la perfección de la inmensidad..."] },
+  { t: 70.0, text: ["Incompleto y roto, como una sombra que no se puede ocultar..."] },
+  { t: 85.0, text: ["Con cicatrices, pero también historias que nadie más puede contar..."] },
+  { t: 100.0, text: ["Incompleto y roto, pero en perfecta armonía con lo demás..."] },
+  { t: 1115.0, text: ["Formando parte de un todo, aunque sus grietas griten su fragilidad..."] },
+  { t: 130.0, text: ["Incompleto y roto, pero un enigma y un susurro", "para los que se atrevan a escuchar..."] },
 ];
+
 
 
 
